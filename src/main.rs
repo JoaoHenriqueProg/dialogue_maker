@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 use raylib::prelude::*;
 
 fn main() {
