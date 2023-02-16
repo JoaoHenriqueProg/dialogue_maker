@@ -10,7 +10,10 @@ fn main() {
 
     let mut cam = Camera2D::default();
     cam.zoom = 1.;
-    cam.offset = Vector2{x: 1280./2., y: 720./2.};
+    cam.offset = Vector2 {
+        x: 1280. / 2.,
+        y: 720. / 2.,
+    };
 
     // Raylib in rust for some reason doesn't provide a get_mouse_delta funcion, so the program will do it ny itself
     let mut last_mouse_pos = rl.get_mouse_position();
@@ -34,6 +37,10 @@ fn main() {
             cam.zoom += wheel * zoom_increment;
         }
 
+        let tlp = rl.get_screen_to_world2D(Vector2 { x: 0., y: 0. }, cam);
+        let trp = rl.get_screen_to_world2D(Vector2 { x: 1280., y: 0. }, cam);
+        let blp = rl.get_screen_to_world2D(Vector2 { x: 0., y: 720. }, cam);
+        let brp = rl.get_screen_to_world2D(Vector2 { x: 1280., y: 720. }, cam);
         // ===== DRAW =====
 
         let mut d = rl.begin_drawing(&thread);
@@ -41,11 +48,6 @@ fn main() {
         let mut new_d = d.begin_mode2D(cam);
 
         new_d.clear_background(Color::WHITE);
-
-        let tlp = cam.target - Vector2{x: 1280./2., y: 720./2.} * (1./cam.zoom);
-        let trp = cam.target + Vector2 { x: 1280., y: 0. } * (1./cam.zoom) - Vector2{x: 1280./2., y: 720./2.} * (1./cam.zoom);
-        let blp = cam.target + Vector2 { x: 0., y: 720. } * (1./cam.zoom) - Vector2{x: 1280./2., y: 720./2.} * (1./cam.zoom);
-        let brp = cam.target + Vector2 { x: 1280., y: 720. } * (1./cam.zoom) - Vector2{x: 1280./2., y: 720./2.} * (1./cam.zoom);
 
         new_d.draw_circle(tlp.x as i32, tlp.y as i32, 5., Color::GREEN);
         new_d.draw_circle(trp.x as i32, trp.y as i32, 5., Color::PINK);
