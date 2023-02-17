@@ -1,15 +1,68 @@
 use raylib::prelude::*;
 
-struct Node {}
+trait CanvasItem {
+    fn get_pos(&self) -> Vector2 {
+        Vector2::default()
+    }
+
+    fn update(&self) {}
+
+    fn is_being_moved(&self) -> bool {
+        return false;
+    }
+
+    fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {}
+}
+
+struct DialogueNode {
+    pos: Vector2,
+}
+struct ConditionalNode {
+    pos: Vector2,
+}
+struct SetFlagNode {
+    pos: Vector2,
+}
+
+impl CanvasItem for DialogueNode {
+    fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
+        d.draw_circle(self.pos.x as i32, self.pos.y as i32, 20., Color::GREEN);
+        println!("drawing");
+    }
+}
+impl CanvasItem for ConditionalNode {
+    fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
+        d.draw_circle(self.pos.x as i32, self.pos.y as i32, 20., Color::GREEN);
+        println!("drawing");
+    }
+}
+impl CanvasItem for SetFlagNode {
+    fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
+        d.draw_circle(self.pos.x as i32, self.pos.y as i32, 20., Color::GREEN);
+        println!("drawing");
+    }
+}
 
 struct CanvasScene {
     cam: Camera2D,
-    nodes: Vec<Node>,
+    nodes: Vec<Box<dyn CanvasItem>>,
 }
 
 impl CanvasScene {
     pub fn update(&mut self, rl: &RaylibHandle, last_mouse_pos: &mut Vector2) {
-// Adapted from 2d camera_mouse_zoom found at: https://www.raylib.com/examples.html
+        let mut is_anyone_being_moved = false;
+        for i in &self.nodes {
+            i.update();
+
+            if i.is_being_moved() {
+                is_anyone_being_moved = true;
+            }
+        }
+
+        if is_anyone_being_moved {
+            return;
+        }
+        // Adapted from 2d camera_mouse_zoom found at: https://www.raylib.com/examples.html
         if rl.is_mouse_button_down(MouseButton::MOUSE_RIGHT_BUTTON) {
             let mut delta = rl.get_mouse_position() - *last_mouse_pos;
             delta.scale(-1. / self.cam.zoom);
@@ -23,7 +76,7 @@ impl CanvasScene {
             let zoom_increment = 0.125;
 
             self.cam.zoom += wheel * zoom_increment;
-        }        
+        }
     }
 
     pub fn draw_background(
@@ -54,6 +107,12 @@ impl CanvasScene {
         d.draw_line(0, i32::MIN, 0, i32::MAX, Color::ORANGE);
         d.draw_line(i32::MIN, 0, i32::MAX, 0, Color::ORANGE);
     }
+
+    pub fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
+        for i in &self.nodes {
+            i.draw(d);
+        }
+    }
 }
 
 fn main() {
@@ -72,9 +131,11 @@ fn main() {
             },
             zoom: 1.,
             target: Vector2::default(),
-            rotation: 0.
+            rotation: 0.,
         },
-        nodes: Vec::default(),
+        nodes: vec![Box::new(DialogueNode {
+            pos: Vector2::default(),
+        })],
     };
 
     // Raylib in rust for some reason doesn't provide a get_mouse_delta funcion, so the program will do it ny itself
@@ -93,10 +154,10 @@ fn main() {
         let mut d = rl.begin_drawing(&thread);
 
         let mut new_d = d.begin_mode2D(canvas_scene.cam);
+        new_d.clear_background(Color::WHITE);
 
         canvas_scene.draw_background(&mut new_d, tlp.clone(), brp.clone());
-
-        new_d.clear_background(Color::WHITE);
+        canvas_scene.draw(&mut new_d);
 
         new_d.draw_text("Hello, world!", 12, 12, 20, Color::BLACK);
         new_d.draw_fps(tlp.x as i32, tlp.y as i32);
