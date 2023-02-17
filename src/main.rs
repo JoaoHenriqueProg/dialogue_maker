@@ -1,15 +1,44 @@
 use raylib::prelude::*;
 
 trait CanvasNode {
+    fn set_pos(&mut self, new_pos: Vector2);
     fn get_pos(&self) -> Vector2;
-    fn update(&self) {}
+    fn set_size(&mut self, new_size: Vector2);
+    fn get_size(&self) -> Vector2;
+    fn update(
+        &mut self,
+        rl: &RaylibHandle,
+        last_mouse_pos: &mut Vector2,
+        cur_zoom: f32,
+        cam: &Camera2D,
+    ) {
+        // Adapted from 2d camera_mouse_zoom found at: https://www.raylib.com/examples.html
+        if rl.is_mouse_button_down(MouseButton::MOUSE_LEFT_BUTTON) {
+            let mouse_x = rl.get_screen_to_world2D(rl.get_mouse_position(), cam).x as i32;
+            let mouse_y = rl.get_screen_to_world2D(rl.get_mouse_position(), cam).y as i32;
+
+            if mouse_x > self.get_pos().x as i32
+                && mouse_x < (self.get_pos().x as i32 + self.get_size().x as i32)
+            {
+                if mouse_y + 6 > self.get_pos().y as i32 as i32
+                    && mouse_y - 6< self.get_pos().y as i32
+                {
+                    let mut delta = *last_mouse_pos - rl.get_mouse_position();
+                    delta.scale(-1. / cur_zoom);
+
+                    self.set_pos(self.get_pos() + delta);
+                }
+            }
+        }
+    }
+
     fn is_being_moved(&self) -> bool {
         return false;
     }
 
     fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>);
 
-    fn draw_node_bg(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>, size: Vector2) {
+    fn draw_node_bg(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
         let corner_radius = 10;
 
         d.draw_circle(
@@ -22,13 +51,13 @@ trait CanvasNode {
         d.draw_rectangle(
             self.get_pos().x as i32,
             self.get_pos().y as i32 - 6,
-            size.x as i32,
+            self.get_size().x as i32,
             12,
             Color::BROWN,
         );
 
         d.draw_circle(
-            self.get_pos().x as i32 + size.x as i32,
+            self.get_pos().x as i32 + self.get_size().x as i32,
             self.get_pos().y as i32,
             6.,
             Color::BROWN,
@@ -41,20 +70,20 @@ trait CanvasNode {
             Color::SKYBLUE,
         );
         d.draw_circle(
-            self.get_pos().x as i32 + size.x as i32 - corner_radius,
+            self.get_pos().x as i32 + self.get_size().x as i32 - corner_radius,
             self.get_pos().y as i32 + corner_radius,
             corner_radius as f32,
             Color::SKYBLUE,
         );
         d.draw_circle(
             self.get_pos().x as i32 + corner_radius,
-            self.get_pos().y as i32 + size.y as i32 - corner_radius,
+            self.get_pos().y as i32 + self.get_size().y as i32 - corner_radius,
             corner_radius as f32,
             Color::SKYBLUE,
         );
         d.draw_circle(
-            self.get_pos().x as i32 + size.x as i32 - corner_radius,
-            self.get_pos().y as i32 + size.y as i32 - corner_radius,
+            self.get_pos().x as i32 + self.get_size().x as i32 - corner_radius,
+            self.get_pos().y as i32 + self.get_size().y as i32 - corner_radius,
             corner_radius as f32,
             Color::SKYBLUE,
         );
@@ -62,15 +91,15 @@ trait CanvasNode {
         d.draw_rectangle(
             self.get_pos().x as i32 + corner_radius,
             self.get_pos().y as i32,
-            size.x as i32 - corner_radius * 2,
-            size.y as i32,
+            self.get_size().x as i32 - corner_radius * 2,
+            self.get_size().y as i32,
             Color::SKYBLUE,
         );
         d.draw_rectangle(
             self.get_pos().x as i32,
             self.get_pos().y as i32 + corner_radius,
-            size.x as i32,
-            size.y as i32 - corner_radius * 2,
+            self.get_size().x as i32,
+            self.get_size().y as i32 - corner_radius * 2,
             Color::SKYBLUE,
         );
     }
@@ -78,55 +107,95 @@ trait CanvasNode {
 
 struct DialogueNode {
     pos: Vector2,
+    size: Vector2,
 }
 struct OptionsNode {
     pos: Vector2,
+    size: Vector2,
 }
 struct ConditionalNode {
     pos: Vector2,
+    size: Vector2,
 }
 struct SetFlagNode {
     pos: Vector2,
+    size: Vector2,
 }
 
 impl CanvasNode for DialogueNode {
+    fn set_pos(&mut self, new_pos: Vector2) {
+        self.pos = new_pos;
+    }
     fn get_pos(&self) -> Vector2 {
         self.pos
+    }
+    fn set_size(&mut self, new_size: Vector2) {
+        self.size = new_size;
+    }
+    fn get_size(&self) -> Vector2 {
+        self.size
     }
 
     fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
         // Card size cauculation will have do be done
-        self.draw_node_bg(d, Vector2 { x: 200., y: 300. });
+        self.draw_node_bg(d);
     }
 }
 impl CanvasNode for OptionsNode {
+    fn set_pos(&mut self, new_pos: Vector2) {
+        self.pos = new_pos;
+    }
     fn get_pos(&self) -> Vector2 {
         self.pos
+    }
+    fn set_size(&mut self, new_size: Vector2) {
+        self.size = new_size;
+    }
+    fn get_size(&self) -> Vector2 {
+        self.size
     }
 
     fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
         // Card size cauculation will have do be done
-        self.draw_node_bg(d, Vector2 { x: 300., y: 200. });
+        self.draw_node_bg(d);
     }
 }
 impl CanvasNode for ConditionalNode {
+    fn set_pos(&mut self, new_pos: Vector2) {
+        self.pos = new_pos;
+    }
     fn get_pos(&self) -> Vector2 {
         self.pos
+    }
+    fn set_size(&mut self, new_size: Vector2) {
+        self.size = new_size;
+    }
+    fn get_size(&self) -> Vector2 {
+        self.size
     }
 
     fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
         // Card size cauculation will have do be done
-        self.draw_node_bg(d, Vector2 { x: 300., y: 200. });
+        self.draw_node_bg(d);
     }
 }
 impl CanvasNode for SetFlagNode {
+    fn set_pos(&mut self, new_pos: Vector2) {
+        self.pos = new_pos;
+    }
     fn get_pos(&self) -> Vector2 {
         self.pos
+    }
+    fn set_size(&mut self, new_size: Vector2) {
+        self.size = new_size;
+    }
+    fn get_size(&self) -> Vector2 {
+        self.size
     }
 
     fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
         // Card size cauculation will have do be done
-        self.draw_node_bg(d, Vector2 { x: 300., y: 200. });
+        self.draw_node_bg(d);
     }
 }
 
@@ -137,18 +206,10 @@ struct CanvasScene {
 
 impl CanvasScene {
     pub fn update(&mut self, rl: &RaylibHandle, last_mouse_pos: &mut Vector2) {
-        let mut is_anyone_being_moved = false;
-        for i in &self.nodes {
-            i.update();
-
-            if i.is_being_moved() {
-                is_anyone_being_moved = true;
-            }
+        for i in self.nodes.iter_mut() {
+            i.update(rl, last_mouse_pos, self.cam.zoom, &self.cam);
         }
 
-        if is_anyone_being_moved {
-            return;
-        }
         // Adapted from 2d camera_mouse_zoom found at: https://www.raylib.com/examples.html
         if rl.is_mouse_button_down(MouseButton::MOUSE_RIGHT_BUTTON) {
             let mut delta = rl.get_mouse_position() - *last_mouse_pos;
@@ -222,6 +283,7 @@ fn main() {
         },
         nodes: vec![Box::new(DialogueNode {
             pos: Vector2 { x: 800., y: 200. },
+            size: Vector2 { x: 600., y: 400. },
         })],
     };
 
