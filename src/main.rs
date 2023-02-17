@@ -1,12 +1,8 @@
 use raylib::prelude::*;
 
 trait CanvasNode {
-    fn get_pos(&self) -> Vector2 {
-        Vector2::default()
-    }
-
+    fn get_pos(&self) -> Vector2;
     fn update(&self) {}
-
     fn is_being_moved(&self) -> bool {
         return false;
     }
@@ -15,7 +11,7 @@ trait CanvasNode {
 
     fn draw_node_bg(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>, size: Vector2) {
         let corner_radius = 10;
-        
+
         d.draw_circle(
             self.get_pos().x as i32,
             self.get_pos().y as i32,
@@ -23,15 +19,21 @@ trait CanvasNode {
             Color::BROWN,
         );
 
-        d.draw_rectangle(0, -6, size.x as i32, 12, Color::BROWN);
-        
+        d.draw_rectangle(
+            self.get_pos().x as i32,
+            self.get_pos().y as i32 - 6,
+            size.x as i32,
+            12,
+            Color::BROWN,
+        );
+
         d.draw_circle(
             self.get_pos().x as i32 + size.x as i32,
             self.get_pos().y as i32,
             6.,
             Color::BROWN,
         );
-        
+
         d.draw_circle(
             self.get_pos().x as i32 + corner_radius,
             self.get_pos().y as i32 + corner_radius,
@@ -56,9 +58,21 @@ trait CanvasNode {
             corner_radius as f32,
             Color::SKYBLUE,
         );
-        
-        d.draw_rectangle(corner_radius, 0, size.x as i32 - corner_radius * 2, size.y as i32, Color::SKYBLUE);
-        d.draw_rectangle(0, corner_radius, size.x as i32, size.y as i32 - corner_radius * 2, Color::SKYBLUE);
+
+        d.draw_rectangle(
+            self.get_pos().x as i32 + corner_radius,
+            self.get_pos().y as i32,
+            size.x as i32 - corner_radius * 2,
+            size.y as i32,
+            Color::SKYBLUE,
+        );
+        d.draw_rectangle(
+            self.get_pos().x as i32,
+            self.get_pos().y as i32 + corner_radius,
+            size.x as i32,
+            size.y as i32 - corner_radius * 2,
+            Color::SKYBLUE,
+        );
     }
 }
 
@@ -82,7 +96,7 @@ impl CanvasNode for DialogueNode {
 
     fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
         // Card size cauculation will have do be done
-        self.draw_node_bg(d, Vector2{x:200., y:300.});
+        self.draw_node_bg(d, Vector2 { x: 200., y: 300. });
     }
 }
 impl CanvasNode for OptionsNode {
@@ -92,7 +106,7 @@ impl CanvasNode for OptionsNode {
 
     fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
         // Card size cauculation will have do be done
-        self.draw_node_bg(d, Vector2{x:300., y:200.});
+        self.draw_node_bg(d, Vector2 { x: 300., y: 200. });
     }
 }
 impl CanvasNode for ConditionalNode {
@@ -102,7 +116,7 @@ impl CanvasNode for ConditionalNode {
 
     fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
         // Card size cauculation will have do be done
-        self.draw_node_bg(d, Vector2{x:300., y:200.});
+        self.draw_node_bg(d, Vector2 { x: 300., y: 200. });
     }
 }
 impl CanvasNode for SetFlagNode {
@@ -112,7 +126,7 @@ impl CanvasNode for SetFlagNode {
 
     fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
         // Card size cauculation will have do be done
-        self.draw_node_bg(d, Vector2{x:300., y:200.});
+        self.draw_node_bg(d, Vector2 { x: 300., y: 200. });
     }
 }
 
@@ -207,7 +221,7 @@ fn main() {
             rotation: 0.,
         },
         nodes: vec![Box::new(DialogueNode {
-            pos: Vector2::default(),
+            pos: Vector2 { x: 800., y: 200. },
         })],
     };
 
