@@ -1,6 +1,6 @@
 use raylib::prelude::*;
 
-trait CanvasItem {
+trait CanvasNode {
     fn get_pos(&self) -> Vector2 {
         Vector2::default()
     }
@@ -11,10 +11,13 @@ trait CanvasItem {
         return false;
     }
 
-    fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {}
+    fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>);
 }
 
 struct DialogueNode {
+    pos: Vector2,
+}
+struct OptionsNode {
     pos: Vector2,
 }
 struct ConditionalNode {
@@ -24,19 +27,25 @@ struct SetFlagNode {
     pos: Vector2,
 }
 
-impl CanvasItem for DialogueNode {
+impl CanvasNode for DialogueNode {
     fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
         d.draw_circle(self.pos.x as i32, self.pos.y as i32, 20., Color::GREEN);
         println!("drawing");
     }
 }
-impl CanvasItem for ConditionalNode {
+impl CanvasNode for OptionsNode {
     fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
         d.draw_circle(self.pos.x as i32, self.pos.y as i32, 20., Color::GREEN);
         println!("drawing");
     }
 }
-impl CanvasItem for SetFlagNode {
+impl CanvasNode for ConditionalNode {
+    fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
+        d.draw_circle(self.pos.x as i32, self.pos.y as i32, 20., Color::GREEN);
+        println!("drawing");
+    }
+}
+impl CanvasNode for SetFlagNode {
     fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
         d.draw_circle(self.pos.x as i32, self.pos.y as i32, 20., Color::GREEN);
         println!("drawing");
@@ -45,7 +54,7 @@ impl CanvasItem for SetFlagNode {
 
 struct CanvasScene {
     cam: Camera2D,
-    nodes: Vec<Box<dyn CanvasItem>>,
+    nodes: Vec<Box<dyn CanvasNode>>,
 }
 
 impl CanvasScene {
