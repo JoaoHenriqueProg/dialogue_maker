@@ -17,12 +17,11 @@ trait CanvasNode {
             let mouse_x = rl.get_screen_to_world2D(rl.get_mouse_position(), cam).x as i32;
             let mouse_y = rl.get_screen_to_world2D(rl.get_mouse_position(), cam).y as i32;
 
-            if mouse_x > self.get_pos().x as i32
-                && mouse_x < (self.get_pos().x as i32 + self.get_size().x as i32)
-            {
-                if mouse_y + 6 > self.get_pos().y as i32 as i32
-                    && mouse_y - 6< self.get_pos().y as i32
-                {
+            let pos_x = self.get_pos().x as i32;
+            let pos_y = self.get_pos().y as i32;
+
+            if mouse_x > pos_x && mouse_x < (pos_x + self.get_size().x as i32) {
+                if mouse_y + 12 > pos_y && mouse_y - 12 < pos_y {
                     let mut delta = *last_mouse_pos - rl.get_mouse_position();
                     delta.scale(-1. / cur_zoom);
 
@@ -36,7 +35,9 @@ trait CanvasNode {
         return false;
     }
 
-    fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>);
+    fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
+        self.draw_node_bg(d);
+    }
 
     fn draw_node_bg(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
         let corner_radius = 10;
@@ -44,22 +45,22 @@ trait CanvasNode {
         d.draw_circle(
             self.get_pos().x as i32,
             self.get_pos().y as i32,
-            6.,
+            12.,
             Color::BROWN,
         );
 
         d.draw_rectangle(
             self.get_pos().x as i32,
-            self.get_pos().y as i32 - 6,
+            self.get_pos().y as i32 - 12,
             self.get_size().x as i32,
-            12,
+            24,
             Color::BROWN,
         );
 
         d.draw_circle(
             self.get_pos().x as i32 + self.get_size().x as i32,
             self.get_pos().y as i32,
-            6.,
+            12.,
             Color::BROWN,
         );
 
@@ -135,11 +136,6 @@ impl CanvasNode for DialogueNode {
     fn get_size(&self) -> Vector2 {
         self.size
     }
-
-    fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
-        // Card size cauculation will have do be done
-        self.draw_node_bg(d);
-    }
 }
 impl CanvasNode for OptionsNode {
     fn set_pos(&mut self, new_pos: Vector2) {
@@ -153,11 +149,6 @@ impl CanvasNode for OptionsNode {
     }
     fn get_size(&self) -> Vector2 {
         self.size
-    }
-
-    fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
-        // Card size cauculation will have do be done
-        self.draw_node_bg(d);
     }
 }
 impl CanvasNode for ConditionalNode {
@@ -173,11 +164,6 @@ impl CanvasNode for ConditionalNode {
     fn get_size(&self) -> Vector2 {
         self.size
     }
-
-    fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
-        // Card size cauculation will have do be done
-        self.draw_node_bg(d);
-    }
 }
 impl CanvasNode for SetFlagNode {
     fn set_pos(&mut self, new_pos: Vector2) {
@@ -191,11 +177,6 @@ impl CanvasNode for SetFlagNode {
     }
     fn get_size(&self) -> Vector2 {
         self.size
-    }
-
-    fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
-        // Card size cauculation will have do be done
-        self.draw_node_bg(d);
     }
 }
 
