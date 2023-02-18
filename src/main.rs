@@ -1,6 +1,6 @@
 use raylib::prelude::*;
 
-trait CanvasNode {
+trait CanvasCard {
     fn set_pos(&mut self, new_pos: Vector2);
     fn get_pos(&self) -> Vector2;
     fn set_size(&mut self, new_size: Vector2);
@@ -106,24 +106,24 @@ trait CanvasNode {
     }
 }
 
-struct DialogueNode {
+struct DialogueCard {
     pos: Vector2,
     size: Vector2,
 }
-struct OptionsNode {
+struct OptionsCard {
     pos: Vector2,
     size: Vector2,
 }
-struct ConditionalNode {
+struct ConditionalCard {
     pos: Vector2,
     size: Vector2,
 }
-struct SetFlagNode {
+struct SetFlagCard {
     pos: Vector2,
     size: Vector2,
 }
 
-impl CanvasNode for DialogueNode {
+impl CanvasCard for DialogueCard {
     fn set_pos(&mut self, new_pos: Vector2) {
         self.pos = new_pos;
     }
@@ -137,7 +137,7 @@ impl CanvasNode for DialogueNode {
         self.size
     }
 }
-impl CanvasNode for OptionsNode {
+impl CanvasCard for OptionsCard {
     fn set_pos(&mut self, new_pos: Vector2) {
         self.pos = new_pos;
     }
@@ -151,7 +151,7 @@ impl CanvasNode for OptionsNode {
         self.size
     }
 }
-impl CanvasNode for ConditionalNode {
+impl CanvasCard for ConditionalCard {
     fn set_pos(&mut self, new_pos: Vector2) {
         self.pos = new_pos;
     }
@@ -165,7 +165,7 @@ impl CanvasNode for ConditionalNode {
         self.size
     }
 }
-impl CanvasNode for SetFlagNode {
+impl CanvasCard for SetFlagCard {
     fn set_pos(&mut self, new_pos: Vector2) {
         self.pos = new_pos;
     }
@@ -182,7 +182,7 @@ impl CanvasNode for SetFlagNode {
 
 struct CanvasScene {
     cam: Camera2D,
-    nodes: Vec<Box<dyn CanvasNode>>,
+    nodes: Vec<Box<dyn CanvasCard>>,
 }
 
 impl CanvasScene {
@@ -262,7 +262,7 @@ fn main() {
             target: Vector2::default(),
             rotation: 0.,
         },
-        nodes: vec![Box::new(DialogueNode {
+        nodes: vec![Box::new(DialogueCard {
             pos: Vector2 { x: 800., y: 200. },
             size: Vector2 { x: 600., y: 400. },
         })],
