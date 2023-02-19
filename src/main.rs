@@ -56,6 +56,7 @@ enum WidgetType {
 struct Widget {
     value: String,
     widget_type: WidgetType,
+    offset: Vector2,
 }
 
 impl Widget {
@@ -83,8 +84,13 @@ impl Widget {
                     23,
                     Color::WHITE,
                 );
+                let mut text_to_show = self.value.clone();
+                if text_to_show.len() > 14 {
+                    text_to_show = text_to_show.chars().take(14).collect();
+                    text_to_show.push_str("...");
+                }
                 d.draw_text(
-                    &self.value,
+                    &text_to_show,
                     in_world_origin_pos.x as i32 + 3,
                     in_world_origin_pos.y as i32 + 3,
                     19,
@@ -105,7 +111,9 @@ impl Widget {
         let mouse_y = in_world_mouse_pos.y as i32;
 
         if mouse_x > origin_x && mouse_x < origin_x + size.x as i32 {
+            println!("x ta certo");
             if mouse_y > origin_y && mouse_y < origin_y + size.y as i32 {
+                println!("y ta certo");
                 return true;
             }
         }
@@ -136,7 +144,7 @@ impl Card {
     fn update(
         &mut self,
         rl: &RaylibHandle,
-        last_mouse_pos: &mut Vector2,
+        mouse_pos: &mut Vector2,
         cur_zoom: f32,
         cam: &Camera2D,
     ) {
@@ -150,64 +158,34 @@ impl Card {
 
             if mouse_x > pos_x && mouse_x < (pos_x + self.get_size().x as i32) {
                 if mouse_y + 12 > pos_y && mouse_y - 12 < pos_y {
-                    let mut delta = *last_mouse_pos - rl.get_mouse_position();
+                    let mut delta = *mouse_pos - rl.get_mouse_position();
                     delta.scale(-1. / cur_zoom);
 
                     self.set_pos(self.get_pos() + delta);
                 }
             }
         }
-    }
 
-    fn is_being_moved(&self) -> bool {
-        return false;
+        for i in &self.widgets {
+            if i.was_clicked(self.pos + i.offset, mouse_pos.clone()) {
+                print!("click");
+            }
+        }
     }
 
     fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
         self.draw_card_bg(d);
         match self.card_type {
             NodeTypes::Dialogue => {
-                let mut y_offset = 0.;
-                y_offset += 10.;
-
-                self.draw_lable(
-                    d,
-                    "Character:",
-                    Vector2 {
-                        x: 10.,
-                        y: y_offset,
-                    },
-                );
-                y_offset += 25.;
-                y_offset += 10.;
+                self.draw_lable(d, "Character:", Vector2 { x: 10., y: 10. });
 
                 let chr_label = &self.widgets[0];
-                chr_label.draw(
-                    d,
-                    self.pos
-                        + Vector2 {
-                            x: 10.,
-                            y: y_offset,
-                        },
-                );
-                y_offset += 25.;
-                y_offset += 10.;
+                chr_label.draw(d, self.pos + Vector2 { x: 10., y: 45. });
 
-                self.draw_lable(
-                    d,
-                    "Dialogue:",
-                    Vector2 {
-                        x: 10.,
-                        y: y_offset,
-                    },
-                );
-                y_offset += 25.;
-                y_offset += 10.;
+                self.draw_lable(d, "Dialogue:", Vector2 { x: 10., y: 80. });
 
                 let dlg_label = &self.widgets[1];
-                dlg_label.draw(d, self.pos + Vector2 { x: 10., y: y_offset });
-                
-                println!("{}", y_offset);
+                dlg_label.draw(d, self.pos + Vector2 { x: 10., y: 115. });
             }
             _ => unimplemented!(),
         }
@@ -226,65 +204,54 @@ impl Card {
     fn draw_card_bg(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
         let corner_radius = 10;
 
-        d.draw_circle(
-            self.get_pos().x as i32,
-            self.get_pos().y as i32,
-            12.,
-            Color::BROWN,
-        );
+        let x_pos = self.pos.x as i32;
+        let y_pos = self.pos.y as i32;
+        let x_size = self.size.x as i32;
+        let y_size = self.size.y as i32;
 
-        d.draw_rectangle(
-            self.get_pos().x as i32,
-            self.get_pos().y as i32 - 12,
-            self.get_size().x as i32,
-            24,
-            Color::BROWN,
-        );
+        d.draw_circle(x_pos, y_pos, 12., Color::BROWN);
+
+        d.draw_rectangle(x_pos, y_pos - 12, x_size, 24, Color::BROWN);
+
+        d.draw_circle(x_pos + x_size, y_pos, 12., Color::BROWN);
 
         d.draw_circle(
-            self.get_pos().x as i32 + self.get_size().x as i32,
-            self.get_pos().y as i32,
-            12.,
-            Color::BROWN,
-        );
-
-        d.draw_circle(
-            self.get_pos().x as i32 + corner_radius,
-            self.get_pos().y as i32 + corner_radius,
+            x_pos + corner_radius,
+            y_pos + corner_radius,
             corner_radius as f32,
             Color::SKYBLUE,
         );
         d.draw_circle(
-            self.get_pos().x as i32 + self.get_size().x as i32 - corner_radius,
-            self.get_pos().y as i32 + corner_radius,
+            x_pos + x_size - corner_radius,
+            y_pos + corner_radius,
             corner_radius as f32,
             Color::SKYBLUE,
         );
         d.draw_circle(
-            self.get_pos().x as i32 + corner_radius,
-            self.get_pos().y as i32 + self.get_size().y as i32 - corner_radius,
+            x_pos + corner_radius,
+            y_pos + y_size - corner_radius,
             corner_radius as f32,
             Color::SKYBLUE,
         );
         d.draw_circle(
-            self.get_pos().x as i32 + self.get_size().x as i32 - corner_radius,
-            self.get_pos().y as i32 + self.get_size().y as i32 - corner_radius,
+            x_pos + x_size - corner_radius,
+            y_pos + y_size - corner_radius,
             corner_radius as f32,
             Color::SKYBLUE,
         );
 
         d.draw_rectangle(
-            self.get_pos().x as i32 + corner_radius,
-            self.get_pos().y as i32,
-            self.get_size().x as i32 - corner_radius * 2,
-            self.get_size().y as i32,
+            x_pos + corner_radius,
+            y_pos,
+            x_size - corner_radius * 2,
+            y_size,
             Color::SKYBLUE,
         );
         d.draw_rectangle(
-            self.get_pos().x as i32,
-            self.get_pos().y as i32 + corner_radius,
-            self.get_size().x as i32,
-            self.get_size().y as i32 - corner_radius * 2,
+            x_pos,
+            y_pos + corner_radius,
+            x_size,
+            y_size - corner_radius * 2,
             Color::SKYBLUE,
         );
     }
@@ -328,17 +295,17 @@ impl CanvasScene {
         for i in (top_left.x - 50.) as i32 / 50..(bottom_right.x + 50.) as i32 / 50 {
             d.draw_line(
                 i * 50,
-                top_left.y as i32,
+                top_left.y as i32 - 10,
                 i * 50,
-                bottom_right.y as i32,
+                bottom_right.y as i32 + 10,
                 Color::BLACK,
             );
         }
         for i in (top_left.y - 50.) as i32 / 50..(bottom_right.y + 50.) as i32 / 50 {
             d.draw_line(
-                top_left.x as i32,
+                top_left.x as i32 - 10,
                 i * 50,
-                bottom_right.x as i32,
+                bottom_right.x as i32 + 10,
                 i * 50,
                 Color::BLACK,
             );
@@ -376,10 +343,12 @@ impl CanvasScene {
                             Widget {
                                 value: chr,
                                 widget_type: WidgetType::TextInput,
+                                offset: Vector2 { x: 10., y: 45. },
                             },
                             Widget {
                                 value: dlg,
                                 widget_type: WidgetType::TextInput,
+                                offset: Vector2 { x: 10., y: 115. },
                             },
                         ],
                         card_type: NodeTypes::Dialogue,
