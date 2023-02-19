@@ -49,10 +49,12 @@ impl Node {
 
 // Note: Cards and widgets will be references to nodes, nodes will not have access to anything related to cards and widgets, but cards and widgets will have knowledge of nodes
 
+#[derive(Clone)]
 enum WidgetType {
     TextInput,
 }
 
+#[derive(Clone)]
 struct Widget {
     value: String,
     widget_type: WidgetType,
@@ -122,8 +124,12 @@ impl Widget {
 struct Card {
     pos: Vector2,
     size: Vector2,
-    widgets: Vec<Widget>,
+    widgets: Vec<Box<Widget>>,
     card_type: NodeTypes,
+}
+
+enum CardNotification {
+    EditTextInput(Box<Widget>),
 }
 
 impl Card {
@@ -133,13 +139,13 @@ impl Card {
         mouse_pos: &mut Vector2,
         cur_zoom: f32,
         cam: &Camera2D,
-    ) {
+    ) -> Option<CardNotification> {
         let mouse_world_pos = rl.get_screen_to_world2D(rl.get_mouse_position(), cam);
 
         if rl.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
             for i in &self.widgets {
                 if i.was_clicked(self.pos + i.offset, mouse_world_pos) {
-                    println!("click");
+                    return Some(CardNotification::EditTextInput(Box::clone(&i)));
                 }
             }
         }
@@ -161,6 +167,8 @@ impl Card {
                 }
             }
         }
+
+        None
     }
 
     fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
@@ -247,16 +255,42 @@ impl Card {
     }
 }
 
+enum CanvasSceneStates {
+    Roaming,
+    EditingTextInput(Box<Widget>),
+}
+
 struct CanvasScene {
     cam: Camera2D,
     cards: Vec<Card>,
     node_pool: Vec<Node>,
+    state: CanvasSceneStates,
 }
 
 impl CanvasScene {
-    pub fn update(&mut self, rl: &RaylibHandle, last_mouse_pos: &mut Vector2) {
+    fn update(&mut self, rl: &RaylibHandle, last_mouse_pos: &mut Vector2) {
+        match self.state {
+            CanvasSceneStates::Roaming => {
+                self.update_roaming(rl, last_mouse_pos);
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    pub fn update_roaming(&mut self, rl: &RaylibHandle, last_mouse_pos: &mut Vector2) {
         for i in self.cards.iter_mut() {
-            i.update(rl, last_mouse_pos, self.cam.zoom, &self.cam);
+            let notify = i.update(rl, last_mouse_pos, self.cam.zoom, &self.cam);
+
+            match notify {
+                Some(notification_type) => match notification_type {
+                    CardNotification::EditTextInput(wte) => {
+                        self.state = CanvasSceneStates::EditingTextInput(Box::clone(&wte));
+                        return;
+                    }
+                    _ => unimplemented!(),
+                },
+                None => {}
+            }
         }
 
         // Adapted from 2d camera_mouse_zoom found at: https://www.raylib.com/examples.html
@@ -330,16 +364,16 @@ impl CanvasScene {
                         pos: Vector2::default(),
                         size: Vector2 { x: 170., y: 150. },
                         widgets: vec![
-                            Widget {
+                            Box::new(Widget {
                                 value: chr,
                                 widget_type: WidgetType::TextInput,
                                 offset: Vector2 { x: 10., y: 45. },
-                            },
-                            Widget {
+                            }),
+                            Box::new(Widget {
                                 value: dlg,
                                 widget_type: WidgetType::TextInput,
                                 offset: Vector2 { x: 10., y: 115. },
-                            },
+                            }),
                         ],
                         card_type: NodeTypes::Dialogue,
                     });
@@ -371,6 +405,7 @@ fn main() {
         },
         cards: Vec::default(),
         node_pool: vec![Node::new_dialogue("John doe", "Test test testing")],
+        state: CanvasSceneStates::Roaming,
     };
     canvas_scene.parse_node_pool();
 
