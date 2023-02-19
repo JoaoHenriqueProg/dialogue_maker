@@ -111,9 +111,7 @@ impl Widget {
         let mouse_y = in_world_mouse_pos.y as i32;
 
         if mouse_x > origin_x && mouse_x < origin_x + size.x as i32 {
-            println!("x ta certo");
             if mouse_y > origin_y && mouse_y < origin_y + size.y as i32 {
-                println!("y ta certo");
                 return true;
             }
         }
@@ -129,18 +127,6 @@ struct Card {
 }
 
 impl Card {
-    fn set_pos(&mut self, new_pos: Vector2) {
-        self.pos = new_pos;
-    }
-    fn get_pos(&self) -> Vector2 {
-        self.pos
-    }
-    fn set_size(&mut self, new_size: Vector2) {
-        self.size = new_size;
-    }
-    fn get_size(&self) -> Vector2 {
-        self.size
-    }
     fn update(
         &mut self,
         rl: &RaylibHandle,
@@ -148,27 +134,31 @@ impl Card {
         cur_zoom: f32,
         cam: &Camera2D,
     ) {
-        // Adapted from 2d camera_mouse_zoom found at: https://www.raylib.com/examples.html
-        if rl.is_mouse_button_down(MouseButton::MOUSE_LEFT_BUTTON) {
-            let mouse_x = rl.get_screen_to_world2D(rl.get_mouse_position(), cam).x as i32;
-            let mouse_y = rl.get_screen_to_world2D(rl.get_mouse_position(), cam).y as i32;
+        let mouse_world_pos = rl.get_screen_to_world2D(rl.get_mouse_position(), cam);
 
-            let pos_x = self.get_pos().x as i32;
-            let pos_y = self.get_pos().y as i32;
-
-            if mouse_x > pos_x && mouse_x < (pos_x + self.get_size().x as i32) {
-                if mouse_y + 12 > pos_y && mouse_y - 12 < pos_y {
-                    let mut delta = *mouse_pos - rl.get_mouse_position();
-                    delta.scale(-1. / cur_zoom);
-
-                    self.set_pos(self.get_pos() + delta);
+        if rl.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
+            for i in &self.widgets {
+                if i.was_clicked(self.pos + i.offset, mouse_world_pos) {
+                    println!("click");
                 }
             }
         }
 
-        for i in &self.widgets {
-            if i.was_clicked(self.pos + i.offset, mouse_pos.clone()) {
-                print!("click");
+        // Adapted from 2d camera_mouse_zoom found at: https://www.raylib.com/examples.html
+        if rl.is_mouse_button_down(MouseButton::MOUSE_LEFT_BUTTON) {
+            let mouse_x = mouse_world_pos.x as i32;
+            let mouse_y = mouse_world_pos.y as i32;
+
+            let pos_x = self.pos.x as i32;
+            let pos_y = self.pos.y as i32;
+
+            if mouse_x > pos_x && mouse_x < (pos_x + self.size.x as i32) {
+                if mouse_y + 12 > pos_y && mouse_y - 12 < pos_y {
+                    let mut delta = *mouse_pos - rl.get_mouse_position();
+                    delta.scale(-1. / cur_zoom);
+
+                    self.pos = self.pos + delta;
+                }
             }
         }
     }
