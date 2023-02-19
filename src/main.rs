@@ -69,35 +69,19 @@ impl Widget {
         self.value.clone()
     }
 
-    fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>, in_world_origin_pos: Vector2) {
+    fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>, card_in_world_origin_pos: Vector2) {
         match self.widget_type {
             WidgetType::TextInput => {
-                d.draw_rectangle(
-                    in_world_origin_pos.x as i32,
-                    in_world_origin_pos.y as i32,
-                    150,
-                    25,
-                    Color::GRAY,
-                );
-                d.draw_rectangle(
-                    in_world_origin_pos.x as i32 + 1,
-                    in_world_origin_pos.y as i32 + 1,
-                    148,
-                    23,
-                    Color::WHITE,
-                );
+                let x_pos = (card_in_world_origin_pos.x + self.offset.x)as i32;
+                let y_pos = (card_in_world_origin_pos.y + self.offset.y) as i32;
+                d.draw_rectangle(x_pos, y_pos, 150, 25, Color::GRAY);
+                d.draw_rectangle(x_pos + 1, y_pos + 1, 148, 23, Color::WHITE);
                 let mut text_to_show = self.value.clone();
                 if text_to_show.len() > 14 {
                     text_to_show = text_to_show.chars().take(14).collect();
                     text_to_show.push_str("...");
                 }
-                d.draw_text(
-                    &text_to_show,
-                    in_world_origin_pos.x as i32 + 3,
-                    in_world_origin_pos.y as i32 + 3,
-                    19,
-                    Color::BLACK,
-                )
+                d.draw_text(&text_to_show, x_pos + 3, y_pos + 3, 19, Color::BLACK)
             }
         }
     }
@@ -178,12 +162,12 @@ impl Card {
                 self.draw_lable(d, "Character:", Vector2 { x: 10., y: 10. });
 
                 let chr_label = &self.widgets[0];
-                chr_label.draw(d, self.pos + Vector2 { x: 10., y: 45. });
+                chr_label.draw(d, self.pos);
 
                 self.draw_lable(d, "Dialogue:", Vector2 { x: 10., y: 80. });
 
                 let dlg_label = &self.widgets[1];
-                dlg_label.draw(d, self.pos + Vector2 { x: 10., y: 115. });
+                dlg_label.draw(d, self.pos);
             }
             _ => unimplemented!(),
         }
