@@ -72,7 +72,7 @@ impl Widget {
     fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>, card_in_world_origin_pos: Vector2) {
         match self.widget_type {
             WidgetType::TextInput => {
-                let x_pos = (card_in_world_origin_pos.x + self.offset.x)as i32;
+                let x_pos = (card_in_world_origin_pos.x + self.offset.x) as i32;
                 let y_pos = (card_in_world_origin_pos.y + self.offset.y) as i32;
                 d.draw_rectangle(x_pos, y_pos, 150, 25, Color::GRAY);
                 d.draw_rectangle(x_pos + 1, y_pos + 1, 148, 23, Color::WHITE);
@@ -253,10 +253,11 @@ struct CanvasScene {
 
 impl CanvasScene {
     fn update(&mut self, rl: &RaylibHandle, last_mouse_pos: &mut Vector2) {
-        match self.state {
+        match &self.state {
             CanvasSceneStates::Roaming => {
                 self.update_roaming(rl, last_mouse_pos);
             }
+            CanvasSceneStates::EditingTextInput(wte) => {}
             _ => unimplemented!(),
         }
     }
@@ -327,6 +328,26 @@ impl CanvasScene {
         for i in &self.cards {
             i.draw(d);
         }
+    }
+
+    fn draw_text_input_edit(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>, tlp: Vector2) {
+        match self.state {
+            CanvasSceneStates::EditingTextInput(_) => {}
+            _ => {return}
+        }
+
+        d.draw_rectangle(
+            (tlp.x) as i32 - 10,
+            (tlp.y) as i32 - 10,
+            1290,
+            730,
+            Color {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 50,
+            },
+        )
     }
 
     pub fn parse_node_pool(&mut self) {
@@ -413,6 +434,7 @@ fn main() {
 
         canvas_scene.draw_background(&mut new_d, tlp.clone(), brp.clone());
         canvas_scene.draw(&mut new_d);
+        canvas_scene.draw_text_input_edit(&mut new_d, tlp); // Runs only if canvas state is EditingTextInput
 
         // new_d.draw_text("Hello, world!", 12, 12, 20, Color::BLACK);
         new_d.draw_fps(tlp.x as i32, tlp.y as i32);
