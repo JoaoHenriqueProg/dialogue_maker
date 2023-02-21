@@ -1,4 +1,9 @@
 use raylib::prelude::*;
+use std::{
+    ops::{Deref, DerefMut},
+    rc::Rc,
+    sync::{Arc, Mutex},
+};
 
 enum NodeTypes {
     Dialogue,
@@ -108,12 +113,12 @@ impl Widget {
 struct Card {
     pos: Vector2,
     size: Vector2,
-    widgets: Vec<Box<Widget>>,
+    widgets: Vec<Arc<Mutex<Widget>>>,
     card_type: NodeTypes,
 }
 
 enum CardNotification {
-    EditTextInput(Box<Widget>),
+    EditTextInput(Arc<Mutex<Widget>>),
 }
 
 impl Card {
@@ -128,8 +133,9 @@ impl Card {
 
         if rl.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
             for i in &self.widgets {
-                if i.was_clicked(self.pos + i.offset, mouse_world_pos) {
-                    return Some(CardNotification::EditTextInput(Box::clone(&i)));
+                let mut data = i.lock().unwrap();
+                if data.was_clicked(self.pos + data.offset, mouse_world_pos) {
+                    return Some(CardNotification::EditTextInput(Arc::clone(&i)));
                 }
             }
         }
@@ -161,12 +167,12 @@ impl Card {
             NodeTypes::Dialogue => {
                 self.draw_lable(d, "Character:", Vector2 { x: 10., y: 10. });
 
-                let chr_label = &self.widgets[0];
+                let chr_label = &self.widgets[0].lock().unwrap();
                 chr_label.draw(d, self.pos);
 
                 self.draw_lable(d, "Dialogue:", Vector2 { x: 10., y: 80. });
 
-                let dlg_label = &self.widgets[1];
+                let dlg_label = &self.widgets[1].lock().unwrap();
                 dlg_label.draw(d, self.pos);
             }
             _ => unimplemented!(),
@@ -241,7 +247,7 @@ impl Card {
 
 enum CanvasSceneStates {
     Roaming,
-    EditingTextInput(Box<Widget>),
+    EditingTextInput(Arc<Mutex<Widget>>),
 }
 
 struct CanvasScene {
@@ -269,7 +275,7 @@ impl CanvasScene {
             match notify {
                 Some(notification_type) => match notification_type {
                     CardNotification::EditTextInput(wte) => {
-                        self.state = CanvasSceneStates::EditingTextInput(Box::clone(&wte));
+                        self.state = CanvasSceneStates::EditingTextInput(Arc::clone(&wte));
                         return;
                     }
                     _ => unimplemented!(),
@@ -330,10 +336,72 @@ impl CanvasScene {
         }
     }
 
-    fn draw_text_input_edit(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>, tlp: Vector2) {
+    // Yes, I diceded to go with some imediate ui here
+    fn update_and_draw_text_input_edit(
+        &mut self,
+        d: &mut RaylibMode2D<'_, RaylibDrawHandle>,
+        tlp: Vector2,
+    ) {
         match self.state {
             CanvasSceneStates::EditingTextInput(_) => {}
-            _ => {return}
+            _ => return,
+        }
+
+        let keymap = [
+            ('A', KeyboardKey::KEY_A),
+            ('B', KeyboardKey::KEY_B),
+            ('C', KeyboardKey::KEY_C),
+            ('D', KeyboardKey::KEY_D),
+            ('E', KeyboardKey::KEY_E),
+            ('F', KeyboardKey::KEY_F),
+            ('G', KeyboardKey::KEY_G),
+            ('H', KeyboardKey::KEY_H),
+            ('I', KeyboardKey::KEY_I),
+            ('J', KeyboardKey::KEY_J),
+            ('K', KeyboardKey::KEY_K),
+            ('L', KeyboardKey::KEY_L),
+            ('M', KeyboardKey::KEY_M),
+            ('N', KeyboardKey::KEY_N),
+            ('O', KeyboardKey::KEY_O),
+            ('P', KeyboardKey::KEY_P),
+            ('Q', KeyboardKey::KEY_Q),
+            ('R', KeyboardKey::KEY_R),
+            ('S', KeyboardKey::KEY_S),
+            ('T', KeyboardKey::KEY_T),
+            ('U', KeyboardKey::KEY_U),
+            ('V', KeyboardKey::KEY_V),
+            ('W', KeyboardKey::KEY_W),
+            ('X', KeyboardKey::KEY_X),
+            ('Y', KeyboardKey::KEY_Y),
+            ('Z', KeyboardKey::KEY_Z),
+        ];
+
+        let mut cur_text;
+
+        match &self.state {
+            CanvasSceneStates::EditingTextInput(wte) => {
+                cur_text = wte.lock().unwrap().value.clone();
+            }
+            _ => panic!("Something has gone incredibly wrong."),
+        }
+        for &(c, key) in &keymap {
+            if d.is_key_pressed(key) {
+                cur_text.push(c);
+            }
+        }
+        match &mut self.state {
+            CanvasSceneStates::EditingTextInput(ref mut wte) => {
+                let mut data = wte.lock().unwrap();
+                if data.value != cur_text {
+                    data.set_value(cur_text);
+                }
+            }
+            _ => panic!("Something has gone incredibly wrong."),
+        }
+
+        if d.is_key_pressed(KeyboardKey::KEY_ENTER) {
+            self.state = CanvasSceneStates::Roaming;
+            return;
         }
 
         d.draw_rectangle(
@@ -347,7 +415,31 @@ impl CanvasScene {
                 b: 0,
                 a: 50,
             },
-        )
+        );
+        d.draw_rectangle(
+            (tlp.x) as i32 + 10,
+            (tlp.y) as i32 + 10,
+            1250,
+            690,
+            Color::WHITE,
+        );
+
+        let cur_text;
+
+        match &self.state {
+            CanvasSceneStates::EditingTextInput(wte) => {
+                cur_text = wte.lock().unwrap().value.clone();
+            }
+            _ => panic!("Something has gone incredibly wrong."),
+        }
+
+        d.draw_text(
+            &cur_text,
+            (tlp.x) as i32 + 20,
+            (tlp.y) as i32 + 20,
+            24,
+            Color::BLACK,
+        );
     }
 
     pub fn parse_node_pool(&mut self) {
@@ -369,16 +461,16 @@ impl CanvasScene {
                         pos: Vector2::default(),
                         size: Vector2 { x: 170., y: 150. },
                         widgets: vec![
-                            Box::new(Widget {
+                            Arc::new(Mutex::new(Widget {
                                 value: chr,
                                 widget_type: WidgetType::TextInput,
                                 offset: Vector2 { x: 10., y: 45. },
-                            }),
-                            Box::new(Widget {
+                            })),
+                            Arc::new(Mutex::new(Widget {
                                 value: dlg,
                                 widget_type: WidgetType::TextInput,
                                 offset: Vector2 { x: 10., y: 115. },
-                            }),
+                            })),
                         ],
                         card_type: NodeTypes::Dialogue,
                     });
@@ -434,7 +526,9 @@ fn main() {
 
         canvas_scene.draw_background(&mut new_d, tlp.clone(), brp.clone());
         canvas_scene.draw(&mut new_d);
-        canvas_scene.draw_text_input_edit(&mut new_d, tlp); // Runs only if canvas state is EditingTextInput
+
+        // ===== IMGUI LIKE PART =====
+        canvas_scene.update_and_draw_text_input_edit(&mut new_d, tlp); // Runs only if canvas state is EditingTextInput
 
         // new_d.draw_text("Hello, world!", 12, 12, 20, Color::BLACK);
         new_d.draw_fps(tlp.x as i32, tlp.y as i32);
