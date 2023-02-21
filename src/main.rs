@@ -525,10 +525,8 @@ impl CanvasScene {
     fn draw_card_connections(&self, d: &mut RaylibMode2D<RaylibDrawHandle>) {
         for i in &self.node_pool {
             let i_card = self.copy_card_data_from_id(i.id.clone());
-
             for j in &i.front_links {
                 let j_card = self.copy_card_data_from_id(j.clone());
-
                 d.draw_line_ex(
                     i_card.get_output_pos(),
                     j_card.get_input_pos(),
