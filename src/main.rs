@@ -1,8 +1,7 @@
 use raylib::prelude::*;
-use std::{
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
+#[derive(Clone)]
 enum NodeTypes {
     Dialogue,
     Options,
@@ -19,32 +18,43 @@ impl Default for NodeTypes {
 
 #[derive(Default)]
 struct Node {
+    id: String,
     character: Option<String>,
     dialogue: Option<String>,
     options: Option<Vec<String>>,
     flag_to_check: Option<String>,
     flag_to_set: Option<String>,
     value_to_set: Option<String>,
+    front_links: Vec<String>, // Vector of other Nodes' ids
     node_type: NodeTypes,
 }
 
 impl Node {
     fn default_dialogue() -> Node {
         Node {
+            id: String::default(),
             character: Some("".to_string()),
             dialogue: Some("".to_string()),
             options: None,
             flag_to_check: None,
             flag_to_set: None,
             value_to_set: None,
+            front_links: Vec::default(),
             node_type: NodeTypes::Dialogue,
         }
     }
 
-    fn new_dialogue<T: ToString>(character: T, dialogue: T) -> Node {
+    fn new_dialogue<T: ToString>(
+        id: T,
+        character: T,
+        dialogue: T,
+        front_links: Vec<String>,
+    ) -> Node {
         let mut to_return = Node::default_dialogue();
+        to_return.id = id.to_string();
         to_return.character = Some(character.to_string());
         to_return.dialogue = Some(dialogue.to_string());
+        to_return.front_links = front_links;
 
         to_return
     }
@@ -108,7 +118,9 @@ impl Widget {
     }
 }
 
+#[derive(Clone)]
 struct Card {
+    node_origin: String,
     pos: Vector2,
     size: Vector2,
     widgets: Vec<Arc<Mutex<Widget>>>,
@@ -240,6 +252,23 @@ impl Card {
             y_size - corner_radius * 2,
             Color::SKYBLUE,
         );
+
+        d.draw_circle(x_pos, y_pos, corner_radius as f32, Color::PINK);
+        d.draw_circle(
+            x_pos + x_size - 10 + corner_radius,
+            y_pos + y_size - corner_radius,
+            corner_radius as f32,
+            Color::PINK,
+        );
+    }
+
+    fn get_output_pos(&self) -> Vector2 {
+        let to_return = self.pos + self.size - Vector2 { x: 0., y: 10. };
+        to_return
+    }
+    fn get_input_pos(&self) -> Vector2 {
+        let to_return = self.pos;
+        to_return
     }
 }
 
@@ -456,9 +485,9 @@ impl CanvasScene {
                         .clone()
                         .unwrap_or("ERROR: NO CHARACTER FOUND".to_string());
 
-                    println!("{}", x_offset);
                     let card_pos = Vector2 { x: x_offset, y: 0. };
                     self.cards.push(Card {
+                        node_origin: i.id.clone(),
                         pos: card_pos,
                         size: Vector2 { x: 170., y: 150. },
                         widgets: vec![
@@ -479,6 +508,33 @@ impl CanvasScene {
                 }
 
                 _ => unimplemented!(),
+            }
+        }
+    }
+
+    fn copy_card_data_from_id(&self, id: String) -> Card {
+        for i in &self.cards {
+            if i.node_origin == id {
+                return i.clone();
+            }
+        }
+
+        unreachable!()
+    }
+
+    fn draw_card_connections(&self, d: &mut RaylibMode2D<RaylibDrawHandle>) {
+        for i in &self.node_pool {
+            let i_card = self.copy_card_data_from_id(i.id.clone());
+
+            for j in &i.front_links {
+                let j_card = self.copy_card_data_from_id(j.clone());
+
+                d.draw_line_ex(
+                    i_card.get_output_pos(),
+                    j_card.get_input_pos(),
+                    5.,
+                    Color::PURPLE,
+                );
             }
         }
     }
@@ -504,10 +560,17 @@ fn main() {
         },
         cards: Vec::default(),
         node_pool: vec![
-            Node::new_dialogue("John doe", "Test test testing"),
             Node::new_dialogue(
+                "001",
+                "John doe",
+                "Test test testing",
+                vec!["002".to_string()],
+            ),
+            Node::new_dialogue(
+                "002",
                 "Second one coming",
                 "I really hope this doesn't break everything.",
+                vec![],
             ),
         ],
         state: CanvasSceneStates::Roaming,
@@ -534,6 +597,7 @@ fn main() {
 
         canvas_scene.draw_background(&mut new_d, tlp.clone(), brp.clone());
         canvas_scene.draw(&mut new_d);
+        canvas_scene.draw_card_connections(&mut new_d);
 
         // ===== IMGUI LIKE PART =====
         canvas_scene.update_and_draw_text_input_edit(&mut new_d, tlp); // Runs only if canvas state is EditingTextInput
