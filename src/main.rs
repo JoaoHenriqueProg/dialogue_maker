@@ -501,7 +501,7 @@ fn main() {
             rotation: 0.,
         },
         cards: Vec::default(),
-        node_pool: vec![Node::new_dialogue("John doe", "Test test testing")],
+        node_pool: vec![Node::new_dialogue("John doe", "Test test testing"), Node::new_dialogue("Second one coming", "I really hope this doesn't break everything.")],
         state: CanvasSceneStates::Roaming,
     };
     canvas_scene.parse_node_pool();
