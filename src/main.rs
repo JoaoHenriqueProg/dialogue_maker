@@ -1,7 +1,5 @@
 use raylib::prelude::*;
 use std::{
-    ops::{Deref, DerefMut},
-    rc::Rc,
     sync::{Arc, Mutex},
 };
 
@@ -445,6 +443,7 @@ impl CanvasScene {
     pub fn parse_node_pool(&mut self) {
         println!("Parsing node_pool");
 
+        let mut x_offset = 0.;
         for i in &self.node_pool {
             match i.node_type {
                 NodeTypes::Dialogue => {
@@ -457,8 +456,10 @@ impl CanvasScene {
                         .clone()
                         .unwrap_or("ERROR: NO CHARACTER FOUND".to_string());
 
+                    println!("{}", x_offset);
+                    let card_pos = Vector2 { x: x_offset, y: 0. };
                     self.cards.push(Card {
-                        pos: Vector2::default(),
+                        pos: card_pos,
                         size: Vector2 { x: 170., y: 150. },
                         widgets: vec![
                             Arc::new(Mutex::new(Widget {
@@ -474,6 +475,7 @@ impl CanvasScene {
                         ],
                         card_type: NodeTypes::Dialogue,
                     });
+                    x_offset += 200.;
                 }
 
                 _ => unimplemented!(),
@@ -501,7 +503,13 @@ fn main() {
             rotation: 0.,
         },
         cards: Vec::default(),
-        node_pool: vec![Node::new_dialogue("John doe", "Test test testing"), Node::new_dialogue("Second one coming", "I really hope this doesn't break everything.")],
+        node_pool: vec![
+            Node::new_dialogue("John doe", "Test test testing"),
+            Node::new_dialogue(
+                "Second one coming",
+                "I really hope this doesn't break everything.",
+            ),
+        ],
         state: CanvasSceneStates::Roaming,
     };
     canvas_scene.parse_node_pool();
