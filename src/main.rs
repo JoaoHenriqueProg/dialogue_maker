@@ -1,5 +1,5 @@
 use raylib::prelude::*;
-use std::sync::{Arc, Mutex};
+use std::{sync::{Arc, Mutex}, any::Any};
 
 #[derive(Clone)]
 enum NodeTypes {
@@ -16,14 +16,13 @@ impl Default for NodeTypes {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 enum NodeMember {
     Character,
     Dialogue,
     Options,
     FlagToCheck,
     FlagToSet,
-    FrontLinks,
 }
 
 #[derive(Default, Clone)]
@@ -79,7 +78,7 @@ enum WidgetType {
 
 #[derive(Clone)]
 struct Widget {
-    node_reference: String,
+    node_ref: String,
     widget_type: WidgetType,
     editing_node_member: NodeMember,
 
@@ -130,7 +129,7 @@ impl Widget {
 
 #[derive(Clone)]
 struct Card {
-    node_origin: String,
+    node_ref: String,
     pos: Vector2,
     size: Vector2,
     widgets: Vec<Widget>,
@@ -142,6 +141,29 @@ enum CardNotification {
 }
 
 impl Card {
+    fn new_dialogue_card(node_id: String, pos: Vector2) -> Card {
+        Card {
+            node_ref: node_id.clone(),
+            pos: pos,
+            size: Vector2 { x: 170., y: 150. },
+            widgets: vec![
+                Widget {
+                    node_ref: node_id.clone(),
+                    widget_type: WidgetType::TextInput,
+                    offset: Vector2 { x: 10., y: 45. },
+                    editing_node_member: NodeMember::Character,
+                },
+                Widget {
+                    node_ref: node_id.clone(),
+                    widget_type: WidgetType::TextInput,
+                    offset: Vector2 { x: 10., y: 115. },
+                    editing_node_member: NodeMember::Dialogue,
+                },
+            ],
+            card_type: NodeTypes::Dialogue,
+        }
+    }
+
     fn update(
         &mut self,
         rl: &RaylibHandle,
@@ -155,7 +177,7 @@ impl Card {
             for i in &self.widgets {
                 if i.was_clicked(self.pos + i.offset, mouse_world_pos) {
                     return Some(CardNotification::EditTextInput {
-                        id: i.node_reference.clone(),
+                        id: i.node_ref.clone(),
                         node_member: i.editing_node_member.clone(),
                     });
                 }
@@ -371,7 +393,7 @@ impl CanvasScene {
 
     pub fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
         for i in &self.cards {
-            i.draw(d, self.copy_node_data_from_id(i.node_origin.clone()));
+            i.draw(d, self.copy_node_data_from_id(i.node_ref.clone()));
         }
     }
 
@@ -419,10 +441,13 @@ impl CanvasScene {
 
         match &self.state {
             CanvasSceneStates::EditingTextInput(wte, member) => match member {
+                NodeMember::Character => {
+                    cur_text = self.copy_node_data_from_id(wte.clone()).character.unwrap();
+                }
                 NodeMember::Dialogue => {
                     cur_text = self.copy_node_data_from_id(wte.clone()).dialogue.unwrap();
                 }
-                _ => unimplemented!(),
+                _ => unimplemented!("{:?}", member)
             },
             _ => panic!("Something has gone incredibly wrong."),
         }
@@ -439,7 +464,10 @@ impl CanvasScene {
                             NodeMember::Dialogue => {
                                 i.dialogue = Some(cur_text.clone());
                             }
-                            _ => unimplemented!(),
+                            NodeMember::Character => {
+                                i.character = Some(cur_text.clone());
+                            }
+                            _ => unimplemented!("{:?}", member),
                         }
                     }
                 }
@@ -498,26 +526,7 @@ impl CanvasScene {
                         .unwrap_or("ERROR: NO CHARACTER FOUND".to_string());
 
                     let card_pos = Vector2 { x: x_offset, y: 0. };
-                    self.cards.push(Card {
-                        node_origin: i.id.clone(),
-                        pos: card_pos,
-                        size: Vector2 { x: 170., y: 150. },
-                        widgets: vec![
-                            Widget {
-                                node_reference: i.id.clone(),
-                                widget_type: WidgetType::TextInput,
-                                offset: Vector2 { x: 10., y: 45. },
-                                editing_node_member: NodeMember::Character,
-                            },
-                            Widget {
-                                node_reference: i.id.clone(),
-                                widget_type: WidgetType::TextInput,
-                                offset: Vector2 { x: 10., y: 115. },
-                                editing_node_member: NodeMember::Dialogue,
-                            },
-                        ],
-                        card_type: NodeTypes::Dialogue,
-                    });
+                    self.cards.push(Card::new_dialogue_card(i.id.clone(), card_pos));
                     x_offset += 200.;
                 }
 
@@ -528,7 +537,7 @@ impl CanvasScene {
 
     fn copy_card_data_from_id(&self, id: String) -> Card {
         for i in &self.cards {
-            if i.node_origin == id {
+            if i.node_ref == id {
                 return i.clone();
             }
         }
