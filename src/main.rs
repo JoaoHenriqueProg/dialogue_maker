@@ -19,7 +19,7 @@ impl Default for NodeTypes {
 enum NodeMember {
     Character,
     Dialogue,
-    Options,
+    Options(usize),
     FlagToCheck,
     FlagToSet,
 }
@@ -188,6 +188,7 @@ impl Card {
         let mut options_widgets = vec![];
 
         let mut y_offset = 10.;
+        let mut cur_i = 0;
         for i in options {
             options_widgets.push(Widget {
                 node_ref: node_id.clone(),
@@ -196,9 +197,10 @@ impl Card {
                     x: 10.,
                     y: y_offset,
                 },
-                editing_node_member: NodeMember::Character,
+                editing_node_member: NodeMember::Options(cur_i),
             });
             y_offset += 35.;
+            cur_i += 1;
         }
 
         Card {
@@ -522,6 +524,10 @@ impl CanvasScene {
                 NodeMember::Dialogue => {
                     cur_text = self.copy_node_data_from_id(wte.clone()).dialogue.unwrap();
                 }
+                NodeMember::Options(i) => {
+                    let options_vec = &self.copy_node_data_from_id(wte.clone()).options.unwrap();
+                    cur_text = options_vec[*i].clone();
+                }
                 _ => unimplemented!("{:?}", member),
             },
             _ => panic!("Something has gone incredibly wrong."),
@@ -541,6 +547,11 @@ impl CanvasScene {
                             }
                             NodeMember::Character => {
                                 i.character = Some(cur_text.clone());
+                            }
+                            NodeMember::Options(opt_i) => {
+                                let mut cur_vec = i.options.clone().unwrap();
+                                cur_vec[*opt_i] = cur_text.clone();
+                                i.options = Some(cur_vec);
                             }
                             _ => unimplemented!("{:?}", member),
                         }
