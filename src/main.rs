@@ -1,6 +1,6 @@
 use raylib::prelude::*;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum NodeTypes {
     Dialogue,
     Options,
@@ -51,7 +51,6 @@ impl Node {
             node_type: NodeTypes::Dialogue,
         }
     }
-
     fn new_dialogue<T: ToString>(
         id: T,
         character: T,
@@ -66,6 +65,28 @@ impl Node {
 
         to_return
     }
+
+    fn default_options() -> Node {
+        Node {
+            id: String::default(),
+            character: None,
+            dialogue: None,
+            options: Some(vec![]),
+            flag_to_check: None,
+            flag_to_set: None,
+            value_to_set: None,
+            front_links: Vec::default(),
+            node_type: NodeTypes::Options,
+        }
+    }
+    fn new_options<T: ToString>(id: T, options: Vec<String>, front_links: Vec<String>) -> Node {
+        let mut to_return = Node::default_options();
+        to_return.id = id.to_string();
+        to_return.options = Some(options);
+        to_return.front_links = front_links;
+
+        to_return
+    }
 }
 
 // Note: Cards and widgets will be references to nodes, nodes will not have access to anything related to cards and widgets, but cards and widgets will have knowledge of nodes
@@ -74,7 +95,7 @@ impl Node {
 enum WidgetType {
     TextInput,
 }
-
+// TODO: Implement outputs
 #[derive(Clone)]
 struct Widget {
     node_ref: String,
@@ -163,6 +184,35 @@ impl Card {
         }
     }
 
+    fn new_options_card(node_id: String, options: Vec<String>, pos: Vector2) -> Card {
+        let mut options_widgets = vec![];
+
+        let mut y_offset = 10.;
+        for i in options {
+            options_widgets.push(Widget {
+                node_ref: node_id.clone(),
+                widget_type: WidgetType::TextInput,
+                offset: Vector2 {
+                    x: 10.,
+                    y: y_offset,
+                },
+                editing_node_member: NodeMember::Character,
+            });
+            y_offset += 35.;
+        }
+
+        Card {
+            node_ref: node_id.clone(),
+            pos: pos,
+            size: Vector2 {
+                x: 170.,
+                y: y_offset,
+            },
+            widgets: options_widgets,
+            card_type: NodeTypes::Options,
+        }
+    }
+
     fn update(
         &mut self,
         rl: &RaylibHandle,
@@ -205,7 +255,7 @@ impl Card {
     }
 
     fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>, node_data: Node) {
-        self.draw_card_bg(d);
+        self.draw_card_bg(d, node_data.clone());
         match self.card_type {
             NodeTypes::Dialogue => {
                 self.draw_lable(d, "Character:", Vector2 { x: 10., y: 10. });
@@ -218,7 +268,16 @@ impl Card {
                 let dlg_label = &self.widgets[1];
                 dlg_label.draw(d, self.pos, node_data.dialogue);
             }
-            _ => unimplemented!(),
+            NodeTypes::Options => {
+                let mut cur_opt_i = 0;
+                for i in &self.widgets {
+                    let cur_opt_vec = node_data.options.clone().unwrap();
+                    let cur_opt_text = cur_opt_vec[cur_opt_i].clone();
+                    i.draw(d, self.pos, Some(cur_opt_text));
+                    cur_opt_i += 1;
+                }
+            }
+            _ => unimplemented!("{:?}", self.card_type),
         }
     }
 
@@ -232,7 +291,7 @@ impl Card {
         );
     }
 
-    fn draw_card_bg(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
+    fn draw_card_bg(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>, node_data: Node) {
         let corner_radius = 10;
 
         let x_pos = self.pos.x as i32;
@@ -287,12 +346,30 @@ impl Card {
         );
 
         d.draw_circle(x_pos, y_pos, corner_radius as f32, Color::PINK);
-        d.draw_circle(
-            x_pos + x_size - 10 + corner_radius,
-            y_pos + y_size - corner_radius,
-            corner_radius as f32,
-            Color::PINK,
-        );
+
+        match self.card_type {
+            NodeTypes::Options => {
+                let mut y_offset = 25;
+                for i in node_data.options.unwrap() {
+                    d.draw_circle(
+                        x_pos + x_size - 10 + corner_radius,
+                        y_pos + y_offset,
+                        corner_radius as f32,
+                        Color::PINK,
+                    );
+                    y_offset += 35;
+                    println!("{}", y_offset);
+                }
+            }
+            _ => {
+                d.draw_circle(
+                    x_pos + x_size - 10 + corner_radius,
+                    y_pos + y_size - corner_radius,
+                    corner_radius as f32,
+                    Color::PINK,
+                );
+            }
+        }
     }
 
     fn get_output_pos(&self) -> Vector2 {
@@ -446,7 +523,7 @@ impl CanvasScene {
                 NodeMember::Dialogue => {
                     cur_text = self.copy_node_data_from_id(wte.clone()).dialogue.unwrap();
                 }
-                _ => unimplemented!("{:?}", member)
+                _ => unimplemented!("{:?}", member),
             },
             _ => panic!("Something has gone incredibly wrong."),
         }
@@ -515,21 +592,21 @@ impl CanvasScene {
         for i in &self.node_pool {
             match i.node_type {
                 NodeTypes::Dialogue => {
-                    let chr = i
-                        .character
-                        .clone()
-                        .unwrap_or("ERROR: NO CHARACTER FOUND".to_string());
-                    let dlg = i
-                        .dialogue
-                        .clone()
-                        .unwrap_or("ERROR: NO CHARACTER FOUND".to_string());
-
                     let card_pos = Vector2 { x: x_offset, y: 0. };
-                    self.cards.push(Card::new_dialogue_card(i.id.clone(), card_pos));
+                    self.cards
+                        .push(Card::new_dialogue_card(i.id.clone(), card_pos));
                     x_offset += 200.;
                 }
-
-                _ => unimplemented!(),
+                NodeTypes::Options => {
+                    let card_pos = Vector2 { x: x_offset, y: 0. };
+                    self.cards.push(Card::new_options_card(
+                        i.id.clone(),
+                        i.clone().options.unwrap(),
+                        card_pos,
+                    ));
+                    x_offset += 200.;
+                }
+                _ => unimplemented!("{:?}", i.node_type),
             }
         }
     }
@@ -556,14 +633,34 @@ impl CanvasScene {
     fn draw_card_connections(&self, d: &mut RaylibMode2D<RaylibDrawHandle>) {
         for i in &self.node_pool {
             let i_card = self.copy_card_data_from_id(i.id.clone());
-            for j in &i.front_links {
-                let j_card = self.copy_card_data_from_id(j.clone());
-                d.draw_line_ex(
-                    i_card.get_output_pos(),
-                    j_card.get_input_pos(),
-                    5.,
-                    Color::PURPLE,
-                );
+
+            match i_card.card_type {
+                NodeTypes::Options => {
+                    let mut y_offset = 25;
+                    for j in &i.front_links {
+                        let j_card = self.copy_card_data_from_id(j.clone());
+                        let start_pos = Vector2{x: i_card.pos.x + i_card.size.x, y: i_card.pos.y + y_offset as f32};
+                        d.draw_line_ex(
+                            start_pos,
+                            j_card.get_input_pos(),
+                            5.,
+                            Color::PURPLE,
+                        );
+                        y_offset += 35;
+                    }
+                }
+
+                _ => {
+                    for j in &i.front_links {
+                        let j_card = self.copy_card_data_from_id(j.clone());
+                        d.draw_line_ex(
+                            i_card.get_output_pos(),
+                            j_card.get_input_pos(),
+                            5.,
+                            Color::PURPLE,
+                        );
+                    }
+                }
             }
         }
     }
@@ -599,7 +696,16 @@ fn main() {
                 "002",
                 "Second one coming",
                 "I really hope this doesn't break everything.",
-                vec![],
+                vec!["003".to_string()],
+            ),
+            Node::new_options(
+                "003",
+                vec![
+                    "Hi".to_string(),
+                    "Bye".to_string(),
+                    "Let's go".to_string(),
+                ],
+                vec!["001".to_string(), "002".to_string(), "003".to_string()],
             ),
         ],
         state: CanvasSceneStates::Roaming,
