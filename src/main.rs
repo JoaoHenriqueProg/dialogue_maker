@@ -358,7 +358,6 @@ impl Card {
                         Color::PINK,
                     );
                     y_offset += 35;
-                    println!("{}", y_offset);
                 }
             }
             _ => {
