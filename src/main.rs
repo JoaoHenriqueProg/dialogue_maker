@@ -156,8 +156,10 @@ struct Card {
     card_type: NodeTypes,
 }
 
+#[derive(Debug)]
 enum CardNotification {
     EditTextInput { id: String, node_member: NodeMember },
+    AddOptionToOptionsNode(String),
 }
 
 impl Card {
@@ -251,6 +253,22 @@ impl Card {
                     self.pos = self.pos + delta;
                 }
             }
+        }
+
+        match self.card_type {
+            NodeTypes::Options => {
+                if rl.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
+                    let add_button_center = Vector2 {
+                        x: self.pos.x + self.size.x / 2.,
+                        y: self.pos.y + self.size.y,
+                    };
+
+                    if mouse_world_pos.distance_to(add_button_center) < 10. {
+                        return Some(CardNotification::AddOptionToOptionsNode(self.node_ref.clone()));
+                    }
+                }
+            }
+            _ => {}
         }
 
         None
@@ -361,6 +379,14 @@ impl Card {
                     );
                     y_offset += 35;
                 }
+
+                y_offset -= 15;
+                d.draw_circle(
+                    x_pos + x_size / 2,
+                    y_pos + y_offset,
+                    corner_radius as f32,
+                    Color::RED,
+                );
             }
             _ => {
                 d.draw_circle(
@@ -407,6 +433,8 @@ impl CanvasScene {
     }
 
     pub fn update_roaming(&mut self, rl: &RaylibHandle, last_mouse_pos: &mut Vector2) {
+        let mut post_handle_notification = None;
+
         for i in self.cards.iter_mut() {
             let notify = i.update(rl, last_mouse_pos, self.cam.zoom, &self.cam);
 
@@ -416,9 +444,42 @@ impl CanvasScene {
                         self.state = CanvasSceneStates::EditingTextInput(id, node_member);
                         return;
                     }
-                    _ => unimplemented!(),
+                    CardNotification::AddOptionToOptionsNode(id) => {
+                        post_handle_notification = Some(CardNotification::AddOptionToOptionsNode(id));
+                    }
+                    _ => {unimplemented!("{:?}", notification_type)},
                 },
                 None => {}
+            }
+        }
+
+        match post_handle_notification {
+            None => {}
+            Some(notification) => match notification {
+                CardNotification::AddOptionToOptionsNode(id) => {
+                    let pos = self.copy_card_data_from_id(id.clone()).pos;
+                    let mut i = 0;
+                    for j in &self.node_pool {
+                        if j.id == id {
+                            break;
+                        }
+                        i += 1;
+                    }
+
+                    let mut cur_node = &mut self.node_pool[i];
+                    let mut next_node_opt_vec = cur_node.options.clone().unwrap();
+                    next_node_opt_vec.push("Empty".to_string());
+                    cur_node.options = Some(next_node_opt_vec);
+
+                    let new_card = Card::new_options_card(
+                        cur_node.id.clone(),
+                        cur_node.clone().options.unwrap(),
+                        pos,
+                    );
+
+                    self.cards[i] = new_card;
+                }
+                _ => unimplemented!("{:?}", notification)
             }
         }
 
@@ -649,13 +710,11 @@ impl CanvasScene {
                     let mut y_offset = 25;
                     for j in &i.front_links {
                         let j_card = self.copy_card_data_from_id(j.clone());
-                        let start_pos = Vector2{x: i_card.pos.x + i_card.size.x, y: i_card.pos.y + y_offset as f32};
-                        d.draw_line_ex(
-                            start_pos,
-                            j_card.get_input_pos(),
-                            5.,
-                            Color::PURPLE,
-                        );
+                        let start_pos = Vector2 {
+                            x: i_card.pos.x + i_card.size.x,
+                            y: i_card.pos.y + y_offset as f32,
+                        };
+                        d.draw_line_ex(start_pos, j_card.get_input_pos(), 5., Color::PURPLE);
                         y_offset += 35;
                     }
                 }
@@ -710,11 +769,7 @@ fn main() {
             ),
             Node::new_options(
                 "003",
-                vec![
-                    "Hi".to_string(),
-                    "Bye".to_string(),
-                    "Let's go".to_string(),
-                ],
+                vec!["Hi".to_string(), "Bye".to_string(), "Let's go".to_string()],
                 vec!["001".to_string(), "002".to_string(), "003".to_string()],
             ),
         ],
