@@ -1,10 +1,12 @@
+use std::any::Any;
+
 use raylib::prelude::*;
 
 #[derive(Clone, Debug)]
 enum NodeTypes {
     Dialogue,
     Options,
-    Conditional,
+    Conditional, // Noticed I didn't think enough about this one, decide to make it so that flags are only flags
     SetFlag,
     SomethingHasGoneReallyWrong,
 }
@@ -32,7 +34,7 @@ struct Node {
     options: Option<Vec<String>>,
     flag_to_check: Option<String>,
     flag_to_set: Option<String>,
-    value_to_set: Option<String>,
+    value_to_set: Option<bool>,
     front_links: Vec<String>, // Vector of other Nodes' ids
     node_type: NodeTypes,
 }
@@ -87,20 +89,42 @@ impl Node {
 
         to_return
     }
+
+    fn default_conditional() -> Node {
+        Node {
+            id: String::default(),
+            character: None,
+            dialogue: None,
+            options: None,
+            flag_to_check: Some("".to_string()),
+            flag_to_set: None,
+            value_to_set: None,
+            front_links: Vec::default(),
+            node_type: NodeTypes::Conditional,
+        }
+    }
+    fn new_conditional<T: ToString>(id: T, flag_to_check: T) -> Node {
+        let mut to_return = Node::default_conditional();
+        to_return.id = id.to_string();
+        to_return.flag_to_check = Some(flag_to_check.to_string());
+
+        to_return
+    }
 }
 
 // Note: Cards and widgets will be references to nodes, nodes will not have access to anything related to cards and widgets, but cards and widgets will have knowledge of nodes
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum WidgetType {
     TextInput,
+    OutputConnection,
 }
 // TODO: Implement outputs
 #[derive(Clone)]
 struct Widget {
     node_ref: String,
     widget_type: WidgetType,
-    editing_node_member: NodeMember,
+    editing_node_member: Option<NodeMember>,
 
     offset: Vector2,
 }
@@ -125,12 +149,20 @@ impl Widget {
                 }
                 d.draw_text(&text_to_show, x_pos + 3, y_pos + 3, 19, Color::BLACK)
             }
+            WidgetType::OutputConnection => {
+                let x_pos = (card_in_world_origin_pos.x + self.offset.x) as i32;
+                let y_pos = (card_in_world_origin_pos.y + self.offset.y) as i32;
+                d.draw_circle(x_pos, y_pos, 10., Color::GREEN)
+            }
+            _ => unimplemented!("{:?}", self.widget_type),
         }
     }
 
     fn was_clicked(&self, in_world_origin_pos: Vector2, in_world_mouse_pos: Vector2) -> bool {
         let size = match self.widget_type {
             WidgetType::TextInput => Vector2 { x: 150., y: 25. },
+            WidgetType::OutputConnection => Vector2 { x: 20., y: 20. },
+            _ => unimplemented!("{:?}", self.widget_type),
         };
 
         let origin_x = in_world_origin_pos.x as i32;
@@ -173,14 +205,21 @@ impl Card {
                     node_ref: node_id.clone(),
                     widget_type: WidgetType::TextInput,
                     offset: Vector2 { x: 10., y: 45. },
-                    editing_node_member: NodeMember::Character,
+                    editing_node_member: Some(NodeMember::Character),
                 },
                 Widget {
                     node_ref: node_id.clone(),
                     widget_type: WidgetType::TextInput,
                     offset: Vector2 { x: 10., y: 115. },
-                    editing_node_member: NodeMember::Dialogue,
+                    editing_node_member: Some(NodeMember::Dialogue),
                 },
+                Widget {
+                    node_ref: node_id.clone(),
+                    widget_type: WidgetType::OutputConnection,
+                    offset: Vector2 { x: 170., y: 140. },
+                    editing_node_member: None,
+                },
+                
             ],
             card_type: NodeTypes::Dialogue,
         }
@@ -199,7 +238,47 @@ impl Card {
                     x: 10.,
                     y: y_offset,
                 },
-                editing_node_member: NodeMember::Options(cur_i),
+                editing_node_member: Some(NodeMember::Options(cur_i)),
+            });
+            options_widgets.push(Widget {
+                node_ref: node_id.clone(),
+                widget_type: WidgetType::OutputConnection,
+                offset: Vector2 {
+                    x: 170.,
+                    y: y_offset + 10.,
+                },
+                editing_node_member: None,
+            });
+            y_offset += 35.;
+            cur_i += 1;
+        }
+
+        Card {
+            node_ref: node_id.clone(),
+            pos: pos,
+            size: Vector2 {
+                x: 170.,
+                y: y_offset,
+            },
+            widgets: options_widgets,
+            card_type: NodeTypes::Options,
+        }
+    }
+
+    fn new_conditional_card(node_id: String, options: Vec<String>, pos: Vector2) -> Card {
+        let mut options_widgets = vec![];
+
+        let mut y_offset = 10.;
+        let mut cur_i = 0;
+        for i in options {
+            options_widgets.push(Widget {
+                node_ref: node_id.clone(),
+                widget_type: WidgetType::TextInput,
+                offset: Vector2 {
+                    x: 10.,
+                    y: y_offset,
+                },
+                editing_node_member: Some(NodeMember::Options(cur_i)),
             });
             y_offset += 35.;
             cur_i += 1;
@@ -231,7 +310,7 @@ impl Card {
                 if i.was_clicked(self.pos + i.offset, mouse_world_pos) {
                     return Some(CardNotification::EditTextInput {
                         id: i.node_ref.clone(),
-                        node_member: i.editing_node_member.clone(),
+                        node_member: i.editing_node_member.clone().unwrap(),
                     });
                 }
             }
@@ -264,7 +343,9 @@ impl Card {
                     };
 
                     if mouse_world_pos.distance_to(add_button_center) < 10. {
-                        return Some(CardNotification::AddOptionToOptionsNode(self.node_ref.clone()));
+                        return Some(CardNotification::AddOptionToOptionsNode(
+                            self.node_ref.clone(),
+                        ));
                     }
                 }
             }
@@ -287,14 +368,25 @@ impl Card {
 
                 let dlg_label = &self.widgets[1];
                 dlg_label.draw(d, self.pos, node_data.dialogue);
+
+                let output = &self.widgets[2];
+                output.draw(d, self.pos, None)
             }
             NodeTypes::Options => {
                 let mut cur_opt_i = 0;
                 for i in &self.widgets {
-                    let cur_opt_vec = node_data.options.clone().unwrap();
-                    let cur_opt_text = cur_opt_vec[cur_opt_i].clone();
-                    i.draw(d, self.pos, Some(cur_opt_text));
-                    cur_opt_i += 1;
+                    match i.widget_type {
+                        WidgetType::TextInput => {
+                            let cur_opt_vec = node_data.options.clone().unwrap();
+                            let cur_opt_text = cur_opt_vec[cur_opt_i].clone();
+                            i.draw(d, self.pos, Some(cur_opt_text));
+                            cur_opt_i += 1;
+                        }
+                        WidgetType::OutputConnection => {
+                            i.draw(d, self.pos, None);
+                        }
+                        _ => unimplemented!("{:?}", i.widget_type),
+                    }
                 }
             }
             _ => unimplemented!("{:?}", self.card_type),
@@ -366,37 +458,6 @@ impl Card {
         );
 
         d.draw_circle(x_pos, y_pos, corner_radius as f32, Color::PINK);
-
-        match self.card_type {
-            NodeTypes::Options => {
-                let mut y_offset = 25;
-                for i in node_data.options.unwrap() {
-                    d.draw_circle(
-                        x_pos + x_size - 10 + corner_radius,
-                        y_pos + y_offset,
-                        corner_radius as f32,
-                        Color::PINK,
-                    );
-                    y_offset += 35;
-                }
-
-                y_offset -= 15;
-                d.draw_circle(
-                    x_pos + x_size / 2,
-                    y_pos + y_offset,
-                    corner_radius as f32,
-                    Color::RED,
-                );
-            }
-            _ => {
-                d.draw_circle(
-                    x_pos + x_size - 10 + corner_radius,
-                    y_pos + y_size - corner_radius,
-                    corner_radius as f32,
-                    Color::PINK,
-                );
-            }
-        }
     }
 
     fn get_output_pos(&self) -> Vector2 {
@@ -445,9 +506,12 @@ impl CanvasScene {
                         return;
                     }
                     CardNotification::AddOptionToOptionsNode(id) => {
-                        post_handle_notification = Some(CardNotification::AddOptionToOptionsNode(id));
+                        post_handle_notification =
+                            Some(CardNotification::AddOptionToOptionsNode(id));
                     }
-                    _ => {unimplemented!("{:?}", notification_type)},
+                    _ => {
+                        unimplemented!("{:?}", notification_type)
+                    }
                 },
                 None => {}
             }
@@ -470,6 +534,9 @@ impl CanvasScene {
                     let mut next_node_opt_vec = cur_node.options.clone().unwrap();
                     next_node_opt_vec.push("Empty".to_string());
                     cur_node.options = Some(next_node_opt_vec);
+                    let mut next_node_exit_vec = cur_node.front_links.clone();
+                    next_node_exit_vec.push("".to_string());
+                    cur_node.front_links = next_node_exit_vec;
 
                     let new_card = Card::new_options_card(
                         cur_node.id.clone(),
@@ -479,8 +546,8 @@ impl CanvasScene {
 
                     self.cards[i] = new_card;
                 }
-                _ => unimplemented!("{:?}", notification)
-            }
+                _ => unimplemented!("{:?}", notification),
+            },
         }
 
         // Adapted from 2d camera_mouse_zoom found at: https://www.raylib.com/examples.html
@@ -677,6 +744,9 @@ impl CanvasScene {
                     ));
                     x_offset += 200.;
                 }
+                NodeTypes::Conditional => {
+                    todo!()
+                }
                 _ => unimplemented!("{:?}", i.node_type),
             }
         }
@@ -704,33 +774,59 @@ impl CanvasScene {
     fn draw_card_connections(&self, d: &mut RaylibMode2D<RaylibDrawHandle>) {
         for i in &self.node_pool {
             let i_card = self.copy_card_data_from_id(i.id.clone());
+            let outputs: Vec<Widget> = i_card
+                .clone()
+                .widgets
+                .iter()
+                .cloned()
+                .filter(|x| x.widget_type == WidgetType::OutputConnection)
+                .collect();
 
-            match i_card.card_type {
-                NodeTypes::Options => {
-                    let mut y_offset = 25;
-                    for j in &i.front_links {
-                        let j_card = self.copy_card_data_from_id(j.clone());
-                        let start_pos = Vector2 {
-                            x: i_card.pos.x + i_card.size.x,
-                            y: i_card.pos.y + y_offset as f32,
-                        };
-                        d.draw_line_ex(start_pos, j_card.get_input_pos(), 5., Color::PURPLE);
-                        y_offset += 35;
-                    }
-                }
-
-                _ => {
-                    for j in &i.front_links {
-                        let j_card = self.copy_card_data_from_id(j.clone());
-                        d.draw_line_ex(
-                            i_card.get_output_pos(),
-                            j_card.get_input_pos(),
-                            5.,
-                            Color::PURPLE,
-                        );
-                    }
-                }
+            if i.front_links.len() != outputs.len() {
+                println!("ERROR: Something is wrong at 'draw_card_connections'");
+                println!("{} e {}", i.front_links.len(), outputs.len());
+                continue;
             }
+
+            for j in 0..i.front_links.len() {
+                if i.front_links[j].clone() == "".to_string() {
+                    continue;
+                }
+
+                let start_pos = i_card.pos + outputs[j].offset;
+                let end_pos = self.copy_card_data_from_id(i.front_links[j].clone()).pos;
+                d.draw_line_ex(start_pos, end_pos, 5., Color::PURPLE);
+            }
+
+            // match i_card.card_type {
+            //     NodeTypes::Options => {
+            //         let mut y_offset = 25;
+            //         for j in &i.front_links {
+            //             if j == "" {
+            //                 continue; // This means the front_link does not link to anything
+            //             }
+            //             let j_card = self.copy_card_data_from_id(j.clone());
+            //             let start_pos = Vector2 {
+            //                 x: i_card.pos.x + i_card.size.x,
+            //                 y: i_card.pos.y + y_offset as f32,
+            //             };
+            //             d.draw_line_ex(start_pos, j_card.get_input_pos(), 5., Color::PURPLE);
+            //             y_offset += 35;
+            //         }
+            //     }
+
+            //     _ => {
+            //         for j in &i.front_links {
+            //             let j_card = self.copy_card_data_from_id(j.clone());
+            //             d.draw_line_ex(
+            //                 i_card.get_output_pos(),
+            //                 j_card.get_input_pos(),
+            //                 5.,
+            //                 Color::PURPLE,
+            //             );
+            //         }
+            //     }
+            // }
         }
     }
 }
@@ -769,9 +865,21 @@ fn main() {
             ),
             Node::new_options(
                 "003",
-                vec!["Hi".to_string(), "Bye".to_string(), "Let's go".to_string()],
-                vec!["001".to_string(), "002".to_string(), "003".to_string()],
+                vec![
+                    "Hi".to_string(),
+                    "Bye".to_string(),
+                    "Let's go".to_string(),
+                    "To the conditionals!".to_string(),
+                ],
+                vec![
+                    "001".to_string(),
+                    "002".to_string(),
+                    "003".to_string(),
+                    //"004".to_string(),
+                    "".to_string(),
+                ],
             ),
+            // Node::new_conditional("004", "Flag_1")
         ],
         state: CanvasSceneStates::Roaming,
     };
