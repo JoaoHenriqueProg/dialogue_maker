@@ -1,3 +1,5 @@
+#![allow(unreachable_patterns)]
+
 use raylib::prelude::*;
 
 #[derive(Clone, Debug)]
@@ -667,7 +669,6 @@ impl CanvasScene {
                     self.cards[i] = new_card;
                 }
                 CardNotification::ToggleCheckBox { id, node_member } => {
-                    let pos = self.copy_card_data_from_id(id.clone()).pos;
                     let mut i = 0;
                     for j in &self.node_pool {
                         if j.id == id {
