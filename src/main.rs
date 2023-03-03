@@ -403,7 +403,7 @@ impl Card {
             }
             NodeTypes::Conditional => {
                 for i in &self.widgets {
-                    i.draw(d, self.pos, Some("Cond card".to_string()));
+                    i.draw(d, self.pos, Some(node_data.flag_to_check.clone().unwrap()));
                 }
 
                 self.draw_lable(d, "branches:", Vector2 { x: 10., y: 45. });
