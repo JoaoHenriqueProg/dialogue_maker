@@ -22,6 +22,7 @@ enum NodeMember {
     Options(usize),
     FlagToCheck,
     FlagToSet,
+    ValueToSet,
 }
 
 #[derive(Default, Clone)]
@@ -115,6 +116,34 @@ impl Node {
 
         to_return
     }
+
+    fn default_set_flag() -> Node {
+        Node {
+            id: String::default(),
+            character: None,
+            dialogue: None,
+            options: None,
+            flag_to_check: None,
+            flag_to_set: Some("".to_string()),
+            value_to_set: Some(false),
+            front_links: Vec::default(),
+            node_type: NodeTypes::SetFlag,
+        }
+    }
+    fn new_set_flag<T: ToString>(
+        id: T,
+        flag_to_set: T,
+        value_to_set: bool,
+        front_links: Vec<String>,
+    ) -> Node {
+        let mut to_return = Node::default_set_flag();
+        to_return.id = id.to_string();
+        to_return.flag_to_set = Some(flag_to_set.to_string());
+        to_return.value_to_set = Some(value_to_set);
+        to_return.front_links = front_links;
+
+        to_return
+    }
 }
 
 // Note: Cards and widgets will be references to nodes, nodes will not have access to anything related to cards and widgets, but cards and widgets will have knowledge of nodes
@@ -122,6 +151,7 @@ impl Node {
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum WidgetType {
     TextInput,
+    CheckBox,
     OutputConnection,
 }
 // TODO: Implement outputs
@@ -140,6 +170,7 @@ impl Widget {
         d: &mut RaylibMode2D<'_, RaylibDrawHandle>,
         card_in_world_origin_pos: Vector2,
         text: Option<String>,
+        check_box_state: Option<bool>,
     ) {
         match self.widget_type {
             WidgetType::TextInput => {
@@ -159,6 +190,25 @@ impl Widget {
                 let y_pos = (card_in_world_origin_pos.y + self.offset.y) as i32;
                 d.draw_circle(x_pos, y_pos, 10., Color::GREEN)
             }
+            WidgetType::CheckBox => {
+                let x_pos = (card_in_world_origin_pos.x + self.offset.x) as i32;
+                let y_pos = (card_in_world_origin_pos.y + self.offset.y) as i32;
+                d.draw_rectangle(x_pos, y_pos, 25, 25, Color::GRAY);
+
+                let mut color = Color::WHITE;
+                if check_box_state.clone().unwrap() {
+                    color = Color::GREEN;
+                }
+
+                d.draw_rectangle(x_pos + 1, y_pos + 1, 23, 23, color);
+
+                let text = match check_box_state.unwrap() {
+                    true => "True",
+                    false => "False",
+                };
+
+                d.draw_text(text, x_pos + 35, y_pos, 25, Color::BLACK);
+            }
             _ => unimplemented!("{:?}", self.widget_type),
         }
     }
@@ -167,6 +217,7 @@ impl Widget {
         let size = match self.widget_type {
             WidgetType::TextInput => Vector2 { x: 150., y: 25. },
             WidgetType::OutputConnection => Vector2 { x: 20., y: 20. },
+            WidgetType::CheckBox => Vector2 { x: 25., y: 25. },
             _ => unimplemented!("{:?}", self.widget_type),
         };
 
@@ -197,6 +248,7 @@ struct Card {
 enum CardNotification {
     EditTextInput { id: String, node_member: NodeMember },
     AddOptionToOptionsNode(String),
+    ToggleCheckBox { id: String, node_member: NodeMember },
 }
 
 impl Card {
@@ -308,6 +360,35 @@ impl Card {
         }
     }
 
+    fn new_set_flag_card(node_id: String, pos: Vector2) -> Card {
+        Card {
+            node_ref: node_id.clone(),
+            pos: pos,
+            size: Vector2 { x: 170., y: 80. },
+            widgets: vec![
+                Widget {
+                    node_ref: node_id.clone(),
+                    widget_type: WidgetType::TextInput,
+                    editing_node_member: Some(NodeMember::FlagToSet),
+                    offset: Vector2 { x: 10., y: 10. },
+                },
+                Widget {
+                    node_ref: node_id.clone(),
+                    widget_type: WidgetType::CheckBox,
+                    editing_node_member: Some(NodeMember::ValueToSet),
+                    offset: Vector2 { x: 10., y: 45. },
+                },
+                Widget {
+                    node_ref: node_id.clone(),
+                    widget_type: WidgetType::OutputConnection,
+                    editing_node_member: None,
+                    offset: Vector2 { x: 170., y: 55. },
+                },
+            ],
+            card_type: NodeTypes::SetFlag,
+        }
+    }
+
     fn update(
         &mut self,
         rl: &RaylibHandle,
@@ -320,10 +401,17 @@ impl Card {
         if rl.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
             for i in &self.widgets {
                 if i.was_clicked(self.pos + i.offset, mouse_world_pos) {
-                    return Some(CardNotification::EditTextInput {
-                        id: i.node_ref.clone(),
-                        node_member: i.editing_node_member.clone().unwrap(),
-                    });
+                    if i.widget_type == WidgetType::CheckBox {
+                        return Some(CardNotification::ToggleCheckBox {
+                            id: i.node_ref.clone(),
+                            node_member: i.editing_node_member.clone().unwrap(),
+                        });
+                    } else {
+                        return Some(CardNotification::EditTextInput {
+                            id: i.node_ref.clone(),
+                            node_member: i.editing_node_member.clone().unwrap(),
+                        });
+                    }
                 }
             }
         }
@@ -374,15 +462,15 @@ impl Card {
                 self.draw_lable(d, "Character:", Vector2 { x: 10., y: 10. });
 
                 let chr_label = &self.widgets[0];
-                chr_label.draw(d, self.pos, node_data.character);
+                chr_label.draw(d, self.pos, node_data.character, None);
 
                 self.draw_lable(d, "Dialogue:", Vector2 { x: 10., y: 80. });
 
                 let dlg_label = &self.widgets[1];
-                dlg_label.draw(d, self.pos, node_data.dialogue);
+                dlg_label.draw(d, self.pos, node_data.dialogue, None);
 
                 let output = &self.widgets[2];
-                output.draw(d, self.pos, None)
+                output.draw(d, self.pos, None, None)
             }
             NodeTypes::Options => {
                 let mut cur_opt_i = 0;
@@ -391,11 +479,11 @@ impl Card {
                         WidgetType::TextInput => {
                             let cur_opt_vec = node_data.options.clone().unwrap();
                             let cur_opt_text = cur_opt_vec[cur_opt_i].clone();
-                            i.draw(d, self.pos, Some(cur_opt_text));
+                            i.draw(d, self.pos, Some(cur_opt_text), None);
                             cur_opt_i += 1;
                         }
                         WidgetType::OutputConnection => {
-                            i.draw(d, self.pos, None);
+                            i.draw(d, self.pos, None, None);
                         }
                         _ => unimplemented!("{:?}", i.widget_type),
                     }
@@ -403,13 +491,28 @@ impl Card {
             }
             NodeTypes::Conditional => {
                 for i in &self.widgets {
-                    i.draw(d, self.pos, Some(node_data.flag_to_check.clone().unwrap()));
+                    i.draw(
+                        d,
+                        self.pos,
+                        Some(node_data.flag_to_check.clone().unwrap()),
+                        None,
+                    );
                 }
 
-                self.draw_lable(d, "branches:", Vector2 { x: 10., y: 45. });
-                self.draw_lable(d, "if true:", Vector2 { x: 10., y: 80. });
-                self.draw_lable(d, "if false:", Vector2 { x: 10., y: 115. });
-                self.draw_lable(d, "if not set:", Vector2 { x: 10., y: 150. });
+                self.draw_lable(d, "Branches:", Vector2 { x: 10., y: 45. });
+                self.draw_lable(d, "If true:", Vector2 { x: 10., y: 80. });
+                self.draw_lable(d, "If false:", Vector2 { x: 10., y: 115. });
+                self.draw_lable(d, "If not set:", Vector2 { x: 10., y: 150. });
+            }
+            NodeTypes::SetFlag => {
+                for i in &self.widgets {
+                    i.draw(
+                        d,
+                        self.pos,
+                        Some(node_data.flag_to_set.clone().unwrap()),
+                        Some(node_data.value_to_set.clone().unwrap()),
+                    );
+                }
             }
             _ => unimplemented!("{:?}", self.card_type),
         }
@@ -522,6 +625,10 @@ impl CanvasScene {
                         post_handle_notification =
                             Some(CardNotification::AddOptionToOptionsNode(id));
                     }
+                    CardNotification::ToggleCheckBox { id, node_member } => {
+                        post_handle_notification =
+                            Some(CardNotification::ToggleCheckBox { id, node_member });
+                    }
                     _ => {
                         unimplemented!("{:?}", notification_type)
                     }
@@ -558,6 +665,25 @@ impl CanvasScene {
                     );
 
                     self.cards[i] = new_card;
+                }
+                CardNotification::ToggleCheckBox { id, node_member } => {
+                    let pos = self.copy_card_data_from_id(id.clone()).pos;
+                    let mut i = 0;
+                    for j in &self.node_pool {
+                        if j.id == id {
+                            break;
+                        }
+                        i += 1;
+                    }
+
+                    let mut cur_node = &mut self.node_pool[i];
+
+                    match node_member {
+                        NodeMember::ValueToSet => {
+                            cur_node.value_to_set = Some(!cur_node.value_to_set.clone().unwrap());
+                        }
+                        _ => unimplemented!("{:?}", node_member),
+                    }
                 }
                 _ => unimplemented!("{:?}", notification),
             },
@@ -670,7 +796,16 @@ impl CanvasScene {
                     cur_text = options_vec[*i].clone();
                 }
                 NodeMember::FlagToCheck => {
-                    cur_text = self.copy_node_data_from_id(wte.clone()).flag_to_check.unwrap();
+                    cur_text = self
+                        .copy_node_data_from_id(wte.clone())
+                        .flag_to_check
+                        .unwrap();
+                }
+                NodeMember::FlagToSet => {
+                    cur_text = self
+                        .copy_node_data_from_id(wte.clone())
+                        .flag_to_set
+                        .unwrap();
                 }
                 _ => unimplemented!("{:?}", member),
             },
@@ -699,6 +834,9 @@ impl CanvasScene {
                             }
                             NodeMember::FlagToCheck => {
                                 i.flag_to_check = Some(cur_text.clone());
+                            }
+                            NodeMember::FlagToSet => {
+                                i.flag_to_set = Some(cur_text.clone());
                             }
                             _ => unimplemented!("{:?}", member),
                         }
@@ -767,6 +905,12 @@ impl CanvasScene {
                     let card_pos = Vector2 { x: x_offset, y: 0. };
                     self.cards
                         .push(Card::new_conditional_card(i.id.clone(), card_pos));
+                    x_offset += 200.;
+                }
+                NodeTypes::SetFlag => {
+                    let card_pos = Vector2 { x: x_offset, y: 0. };
+                    self.cards
+                        .push(Card::new_set_flag_card(i.id.clone(), card_pos));
                     x_offset += 200.;
                 }
                 _ => unimplemented!("{:?}", i.node_type),
@@ -867,15 +1011,15 @@ fn main() {
                     "001".to_string(),
                     "002".to_string(),
                     "003".to_string(),
-                    //"004".to_string(),
-                    "".to_string(),
+                    "004".to_string(),
                 ],
             ),
             Node::new_conditional(
                 "004",
-                "Flag_1",
+                "FLAG1",
                 vec!["001".to_string(), "".to_string(), "003".to_string()],
             ),
+            Node::new_set_flag("005", "FLAG1", true, vec!["".to_string()]),
         ],
         state: CanvasSceneStates::Roaming,
     };
