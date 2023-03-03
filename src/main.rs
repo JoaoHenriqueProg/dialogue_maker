@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use raylib::prelude::*;
 
 #[derive(Clone, Debug)]
@@ -236,7 +234,7 @@ impl Card {
 
         let mut y_offset = 10.;
         let mut cur_i = 0;
-        for i in options {
+        for _ in options {
             options_widgets.push(Widget {
                 node_ref: node_id.clone(),
                 widget_type: WidgetType::TextInput,
@@ -370,7 +368,7 @@ impl Card {
     }
 
     fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>, node_data: Node) {
-        self.draw_card_bg(d, node_data.clone());
+        self.draw_card_bg(d);
         match self.card_type {
             NodeTypes::Dialogue => {
                 self.draw_lable(d, "Character:", Vector2 { x: 10., y: 10. });
@@ -404,9 +402,7 @@ impl Card {
                 }
             }
             NodeTypes::Conditional => {
-                for i in &self.widgets {
-                    i.draw(d, self.pos, Some("Cond card".to_string()));
-                }
+                self.widgets[0].draw(d, self.pos, Some("Cond card".to_string()));
 
                 self.draw_lable(d, "branches:", Vector2 { x: 10., y: 45. });
                 self.draw_lable(d, "if true:", Vector2 { x: 10., y: 80. });
@@ -427,7 +423,7 @@ impl Card {
         );
     }
 
-    fn draw_card_bg(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>, node_data: Node) {
+    fn draw_card_bg(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
         let corner_radius = 10;
 
         let x_pos = self.pos.x as i32;
