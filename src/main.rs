@@ -24,6 +24,7 @@ enum NodeMember {
     Options(usize),
     FlagToCheck,
     FlagToSet,
+    FrontLink(usize),
 }
 
 #[derive(Default, Clone)]
@@ -103,10 +104,17 @@ impl Node {
             node_type: NodeTypes::Conditional,
         }
     }
-    fn new_conditional<T: ToString>(id: T, flag_to_check: T) -> Node {
+    fn new_conditional<T: ToString>(id: T, flag_to_check: T, front_links: Vec<String>) -> Node {
         let mut to_return = Node::default_conditional();
         to_return.id = id.to_string();
         to_return.flag_to_check = Some(flag_to_check.to_string());
+
+        if front_links.len() != 3 {
+            println!("ERROR: New_conditional front_links parameter should have a lenght of 3, setting to default");
+            to_return.front_links = vec!["".to_string(), "".to_string(), "".to_string()];
+        } else {
+            to_return.front_links = front_links;
+        }
 
         to_return
     }
@@ -219,7 +227,6 @@ impl Card {
                     offset: Vector2 { x: 170., y: 140. },
                     editing_node_member: None,
                 },
-                
             ],
             card_type: NodeTypes::Dialogue,
         }
@@ -265,34 +272,60 @@ impl Card {
         }
     }
 
-    fn new_conditional_card(node_id: String, options: Vec<String>, pos: Vector2) -> Card {
-        let mut options_widgets = vec![];
-
-        let mut y_offset = 10.;
-        let mut cur_i = 0;
-        for i in options {
-            options_widgets.push(Widget {
-                node_ref: node_id.clone(),
-                widget_type: WidgetType::TextInput,
-                offset: Vector2 {
-                    x: 10.,
-                    y: y_offset,
-                },
-                editing_node_member: Some(NodeMember::Options(cur_i)),
-            });
-            y_offset += 35.;
-            cur_i += 1;
-        }
-
+    fn new_conditional_card(node_id: String, pos: Vector2) -> Card {
         Card {
             node_ref: node_id.clone(),
             pos: pos,
-            size: Vector2 {
-                x: 170.,
-                y: y_offset,
-            },
-            widgets: options_widgets,
-            card_type: NodeTypes::Options,
+            size: Vector2 { x: 170., y: 185. },
+            // flag to check
+            // if true ->
+            // if false ->
+            // wasn't set ->
+            widgets: vec![
+                Widget {
+                    node_ref: node_id.clone(),
+                    widget_type: WidgetType::TextInput,
+                    editing_node_member: Some(NodeMember::FlagToCheck),
+                    offset: Vector2 { x: 10., y: 10. },
+                },
+                Widget {
+                    node_ref: node_id.clone(),
+                    widget_type: WidgetType::TextInput,
+                    editing_node_member: Some(NodeMember::FrontLink(0)),
+                    offset: Vector2 { x: 10., y: 80. },
+                },
+                Widget {
+                    node_ref: node_id.clone(),
+                    widget_type: WidgetType::TextInput,
+                    editing_node_member: Some(NodeMember::FrontLink(1)),
+                    offset: Vector2 { x: 10., y: 115. },
+                },
+                Widget {
+                    node_ref: node_id.clone(),
+                    widget_type: WidgetType::TextInput,
+                    editing_node_member: Some(NodeMember::FrontLink(2)),
+                    offset: Vector2 { x: 10., y: 150. },
+                },
+                Widget {
+                    node_ref: node_id.clone(),
+                    widget_type: WidgetType::OutputConnection,
+                    editing_node_member: None,
+                    offset: Vector2 { x: 170., y: 90. },
+                },
+                Widget {
+                    node_ref: node_id.clone(),
+                    widget_type: WidgetType::OutputConnection,
+                    editing_node_member: None,
+                    offset: Vector2 { x: 170., y: 125. },
+                },
+                Widget {
+                    node_ref: node_id.clone(),
+                    widget_type: WidgetType::OutputConnection,
+                    editing_node_member: None,
+                    offset: Vector2 { x: 170., y: 160. },
+                },
+            ],
+            card_type: NodeTypes::Conditional,
         }
     }
 
@@ -389,6 +422,13 @@ impl Card {
                     }
                 }
             }
+            NodeTypes::Conditional => {
+                for i in &self.widgets {
+                    i.draw(d, self.pos, Some("Cond card".to_string()));
+                }
+
+                self.draw_lable(d, "branches: ", Vector2 { x: 10., y: 45. });
+            }
             _ => unimplemented!("{:?}", self.card_type),
         }
     }
@@ -458,15 +498,6 @@ impl Card {
         );
 
         d.draw_circle(x_pos, y_pos, corner_radius as f32, Color::PINK);
-    }
-
-    fn get_output_pos(&self) -> Vector2 {
-        let to_return = self.pos + self.size - Vector2 { x: 0., y: 10. };
-        to_return
-    }
-    fn get_input_pos(&self) -> Vector2 {
-        let to_return = self.pos;
-        to_return
     }
 }
 
@@ -745,7 +776,10 @@ impl CanvasScene {
                     x_offset += 200.;
                 }
                 NodeTypes::Conditional => {
-                    todo!()
+                    let card_pos = Vector2 { x: x_offset, y: 0. };
+                    self.cards
+                        .push(Card::new_conditional_card(i.id.clone(), card_pos));
+                    x_offset += 200.;
                 }
                 _ => unimplemented!("{:?}", i.node_type),
             }
@@ -797,36 +831,6 @@ impl CanvasScene {
                 let end_pos = self.copy_card_data_from_id(i.front_links[j].clone()).pos;
                 d.draw_line_ex(start_pos, end_pos, 5., Color::PURPLE);
             }
-
-            // match i_card.card_type {
-            //     NodeTypes::Options => {
-            //         let mut y_offset = 25;
-            //         for j in &i.front_links {
-            //             if j == "" {
-            //                 continue; // This means the front_link does not link to anything
-            //             }
-            //             let j_card = self.copy_card_data_from_id(j.clone());
-            //             let start_pos = Vector2 {
-            //                 x: i_card.pos.x + i_card.size.x,
-            //                 y: i_card.pos.y + y_offset as f32,
-            //             };
-            //             d.draw_line_ex(start_pos, j_card.get_input_pos(), 5., Color::PURPLE);
-            //             y_offset += 35;
-            //         }
-            //     }
-
-            //     _ => {
-            //         for j in &i.front_links {
-            //             let j_card = self.copy_card_data_from_id(j.clone());
-            //             d.draw_line_ex(
-            //                 i_card.get_output_pos(),
-            //                 j_card.get_input_pos(),
-            //                 5.,
-            //                 Color::PURPLE,
-            //             );
-            //         }
-            //     }
-            // }
         }
     }
 }
@@ -879,7 +883,11 @@ fn main() {
                     "".to_string(),
                 ],
             ),
-            // Node::new_conditional("004", "Flag_1")
+            Node::new_conditional(
+                "004",
+                "Flag_1",
+                vec!["001".to_string(), "".to_string(), "003".to_string()],
+            ),
         ],
         state: CanvasSceneStates::Roaming,
     };
