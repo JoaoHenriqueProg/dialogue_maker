@@ -24,7 +24,6 @@ enum NodeMember {
     Options(usize),
     FlagToCheck,
     FlagToSet,
-    FrontLink(usize),
 }
 
 #[derive(Default, Clone)]
@@ -290,24 +289,6 @@ impl Card {
                 },
                 Widget {
                     node_ref: node_id.clone(),
-                    widget_type: WidgetType::TextInput,
-                    editing_node_member: Some(NodeMember::FrontLink(0)),
-                    offset: Vector2 { x: 10., y: 80. },
-                },
-                Widget {
-                    node_ref: node_id.clone(),
-                    widget_type: WidgetType::TextInput,
-                    editing_node_member: Some(NodeMember::FrontLink(1)),
-                    offset: Vector2 { x: 10., y: 115. },
-                },
-                Widget {
-                    node_ref: node_id.clone(),
-                    widget_type: WidgetType::TextInput,
-                    editing_node_member: Some(NodeMember::FrontLink(2)),
-                    offset: Vector2 { x: 10., y: 150. },
-                },
-                Widget {
-                    node_ref: node_id.clone(),
                     widget_type: WidgetType::OutputConnection,
                     editing_node_member: None,
                     offset: Vector2 { x: 170., y: 90. },
@@ -427,7 +408,10 @@ impl Card {
                     i.draw(d, self.pos, Some("Cond card".to_string()));
                 }
 
-                self.draw_lable(d, "branches: ", Vector2 { x: 10., y: 45. });
+                self.draw_lable(d, "branches:", Vector2 { x: 10., y: 45. });
+                self.draw_lable(d, "if true:", Vector2 { x: 10., y: 80. });
+                self.draw_lable(d, "if false:", Vector2 { x: 10., y: 115. });
+                self.draw_lable(d, "if not set:", Vector2 { x: 10., y: 150. });
             }
             _ => unimplemented!("{:?}", self.card_type),
         }
@@ -687,6 +671,9 @@ impl CanvasScene {
                     let options_vec = &self.copy_node_data_from_id(wte.clone()).options.unwrap();
                     cur_text = options_vec[*i].clone();
                 }
+                NodeMember::FlagToCheck => {
+                    cur_text = self.copy_node_data_from_id(wte.clone()).flag_to_check.unwrap();
+                }
                 _ => unimplemented!("{:?}", member),
             },
             _ => panic!("Something has gone incredibly wrong."),
@@ -711,6 +698,9 @@ impl CanvasScene {
                                 let mut cur_vec = i.options.clone().unwrap();
                                 cur_vec[*opt_i] = cur_text.clone();
                                 i.options = Some(cur_vec);
+                            }
+                            NodeMember::FlagToCheck => {
+                                i.flag_to_check = Some(cur_text.clone());
                             }
                             _ => unimplemented!("{:?}", member),
                         }
