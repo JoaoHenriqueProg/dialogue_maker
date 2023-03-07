@@ -2,6 +2,12 @@
 
 use raylib::prelude::*;
 
+#[derive(Debug)]
+enum CanvasMouseState {
+    Roaming,
+    CreatingConnection(String, usize), //id, output_index
+}
+
 #[derive(Clone, Debug)]
 enum NodeTypes {
     Dialogue,
@@ -251,6 +257,7 @@ enum CardNotification {
     EditTextInput { id: String, node_member: NodeMember },
     AddOptionToOptionsNode(String),
     ToggleCheckBox { id: String, node_member: NodeMember },
+    CreatingCardConnection(String, usize), // id, output index
 }
 
 impl Card {
@@ -391,28 +398,50 @@ impl Card {
         }
     }
 
+    fn copy_output_widgets(&self) -> Vec<Widget> {
+        self.widgets
+            .iter()
+            .clone()
+            .filter(|x| x.widget_type == WidgetType::OutputConnection)
+            .map(|x| x.clone())
+            .collect()
+    }
+
     fn update(
         &mut self,
         rl: &RaylibHandle,
-        mouse_pos: &mut Vector2,
+        mouse_pos: &Vector2,
         cur_zoom: f32,
         cam: &Camera2D,
     ) -> Option<CardNotification> {
         let mouse_world_pos = rl.get_screen_to_world2D(rl.get_mouse_position(), cam);
 
         if rl.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
-            for i in &self.widgets {
-                if i.was_clicked(self.pos + i.offset, mouse_world_pos) {
-                    if i.widget_type == WidgetType::CheckBox {
-                        return Some(CardNotification::ToggleCheckBox {
-                            id: i.node_ref.clone(),
-                            node_member: i.editing_node_member.clone().unwrap(),
-                        });
-                    } else {
-                        return Some(CardNotification::EditTextInput {
-                            id: i.node_ref.clone(),
-                            node_member: i.editing_node_member.clone().unwrap(),
-                        });
+            for (wid_i, wid) in self.widgets.iter().enumerate() {
+                if wid.was_clicked(self.pos + wid.offset, mouse_world_pos) {
+                    match wid.widget_type {
+                        WidgetType::CheckBox => {
+                            return Some(CardNotification::ToggleCheckBox {
+                                id: wid.node_ref.clone(),
+                                node_member: wid.editing_node_member.clone().unwrap(),
+                            });
+                        }
+                        WidgetType::TextInput => {
+                            return Some(CardNotification::EditTextInput {
+                                id: wid.node_ref.clone(),
+                                node_member: wid.editing_node_member.clone().unwrap(),
+                            });
+                        }
+                        WidgetType::OutputConnection => {
+                            let o = self.copy_output_widgets();
+                            return Some(CardNotification::CreatingCardConnection(
+                                wid.node_ref.clone(),
+                                wid_i,
+                            ));
+                        }
+                        _ => {
+                            println!("TODO: Handle was_clicked for '{:?}'", wid.widget_type);
+                        }
                     }
                 }
             }
@@ -598,6 +627,7 @@ struct CanvasScene {
     cards: Vec<Card>,
     node_pool: Vec<Node>,
     state: CanvasSceneStates,
+    mouse_sate: CanvasMouseState,
 }
 
 impl CanvasScene {
@@ -613,6 +643,35 @@ impl CanvasScene {
 
     pub fn update_roaming(&mut self, rl: &RaylibHandle, last_mouse_pos: &mut Vector2) {
         let mut post_handle_notification = None;
+
+        match &self.mouse_sate {
+            CanvasMouseState::Roaming => {}
+            CanvasMouseState::CreatingConnection(ref_id, i) => {
+                if rl.is_mouse_button_released(MouseButton::MOUSE_LEFT_BUTTON) {
+                    // TODO: Create function that gets the position of the card input
+                    for c in &self.cards {
+                        // found the card it will be linked to, it's c
+                        if rl
+                            .get_screen_to_world2D(rl.get_mouse_position(), self.cam)
+                            .distance_to(c.pos)
+                            < 10.
+                        {
+                            let node_output_i = i - (self.copy_card_data_from_id(ref_id.clone()).widgets.len() - self.copy_card_data_from_id(ref_id.clone()).copy_output_widgets().len());
+
+                            for n in &mut self.node_pool {
+                                if n.id == ref_id.clone() {
+                                    n.front_links[node_output_i] = c.node_ref.clone();
+                                }
+                            }
+                        }
+                    }
+
+                    self.mouse_sate = CanvasMouseState::Roaming;
+                }
+                return
+            }
+            _ => unimplemented!("{:?}", self.mouse_sate),
+        }
 
         for i in self.cards.iter_mut() {
             let notify = i.update(rl, last_mouse_pos, self.cam.zoom, &self.cam);
@@ -630,6 +689,10 @@ impl CanvasScene {
                     CardNotification::ToggleCheckBox { id, node_member } => {
                         post_handle_notification =
                             Some(CardNotification::ToggleCheckBox { id, node_member });
+                    }
+                    CardNotification::CreatingCardConnection(id, i) => {
+                        self.mouse_sate = CanvasMouseState::CreatingConnection(id, i);
+                        return;
                     }
                     _ => {
                         unimplemented!("{:?}", notification_type)
@@ -941,13 +1004,7 @@ impl CanvasScene {
     fn draw_card_connections(&self, d: &mut RaylibMode2D<RaylibDrawHandle>) {
         for i in &self.node_pool {
             let i_card = self.copy_card_data_from_id(i.id.clone());
-            let outputs: Vec<Widget> = i_card
-                .clone()
-                .widgets
-                .iter()
-                .cloned()
-                .filter(|x| x.widget_type == WidgetType::OutputConnection)
-                .collect();
+            let outputs = i_card.copy_output_widgets();
 
             if i.front_links.len() != outputs.len() {
                 println!("ERROR: Something is wrong at 'draw_card_connections'");
@@ -964,6 +1021,21 @@ impl CanvasScene {
                 let end_pos = self.copy_card_data_from_id(i.front_links[j].clone()).pos;
                 d.draw_line_ex(start_pos, end_pos, 5., Color::PURPLE);
             }
+        }
+
+        match &self.mouse_sate {
+            CanvasMouseState::CreatingConnection(id, i) => {
+                let start_pos = self.copy_card_data_from_id(id.clone()).pos
+                    + self
+                        .copy_card_data_from_id(id.clone())
+                        .widgets
+                        .get(i.clone())
+                        .unwrap()
+                        .offset;
+                let end_pos = d.get_screen_to_world2D(d.get_mouse_position(), self.cam);
+                d.draw_line_ex(start_pos, end_pos, 5., Color::PURPLE);
+            }
+            _ => {}
         }
     }
 }
@@ -1023,6 +1095,7 @@ fn main() {
             Node::new_set_flag("005", "FLAG1", true, vec!["".to_string()]),
         ],
         state: CanvasSceneStates::Roaming,
+        mouse_sate: CanvasMouseState::Roaming,
     };
     canvas_scene.parse_node_pool();
 
