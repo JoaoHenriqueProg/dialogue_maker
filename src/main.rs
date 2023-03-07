@@ -409,7 +409,7 @@ impl Card {
             .collect()
     }
 
-    fn from_output_widget_i_to_node_front_link_i(&self, wid_i: usize) -> usize {
+    fn from_output_widget_i_to_node_front_link_i(&self, wid_i: &usize) -> usize {
         wid_i - (self.widgets.len() - self.copy_output_widgets().len())
     }
 
@@ -679,11 +679,11 @@ impl CanvasScene {
                             break;
                         }
                     }
-                    if found != "".to_string() {
+                    if found != "" {
                         // this is getting too confusing
                         let node_output_i = self
                             .copy_card_data(&ref_id)
-                            .from_output_widget_i_to_node_front_link_i(i.clone());
+                            .from_output_widget_i_to_node_front_link_i(&i);
 
                         self.get_node_ref(&ref_id.clone()).front_links[node_output_i] = found;
                     }
@@ -730,7 +730,7 @@ impl CanvasScene {
                     CardNotification::CreatingCardConnection(id, i) => {
                         self.mouse_sate = CanvasMouseState::CreatingConnection(id.clone(), i);
 
-                        let output_i = c.from_output_widget_i_to_node_front_link_i(i);
+                        let output_i = c.from_output_widget_i_to_node_front_link_i(&i);
 
                         self.get_node_ref(&id).front_links[output_i] = "".to_string();
                         return;
@@ -916,7 +916,7 @@ impl CanvasScene {
         match &self.state {
             CanvasSceneStates::EditingTextInput(id, member) => {
                 for i in &mut self.node_pool {
-                    if i.id == id.clone() {
+                    if i.id == id.as_str() {
                         match member {
                             NodeMember::Dialogue => {
                                 i.dialogue = Some(cur_text.clone());
@@ -1046,7 +1046,7 @@ impl CanvasScene {
             }
 
             for j in 0..i.front_links.len() {
-                if i.front_links[j].clone() == "".to_string() {
+                if i.front_links[j] == "" {
                     continue;
                 }
 
