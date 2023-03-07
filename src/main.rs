@@ -651,6 +651,7 @@ impl CanvasScene {
                     // TODO: Create function that gets the position of the card input
                     for c in &self.cards {
                         // found the card it will be linked to, it's c
+                        // writing this code made my head hurt
                         if rl
                             .get_screen_to_world2D(rl.get_mouse_position(), self.cam)
                             .distance_to(c.pos)
