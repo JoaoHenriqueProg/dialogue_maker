@@ -657,7 +657,12 @@ impl CanvasScene {
                             .distance_to(c.pos)
                             < 10.
                         {
-                            let node_output_i = i - (self.copy_card_data_from_id(ref_id.clone()).widgets.len() - self.copy_card_data_from_id(ref_id.clone()).copy_output_widgets().len());
+                            let node_output_i = i
+                                - (self.copy_card_data_from_id(ref_id.clone()).widgets.len()
+                                    - self
+                                        .copy_card_data_from_id(ref_id.clone())
+                                        .copy_output_widgets()
+                                        .len());
 
                             for n in &mut self.node_pool {
                                 if n.id == ref_id.clone() {
@@ -669,7 +674,7 @@ impl CanvasScene {
 
                     self.mouse_sate = CanvasMouseState::Roaming;
                 }
-                return
+                return;
             }
             _ => unimplemented!("{:?}", self.mouse_sate),
         }
