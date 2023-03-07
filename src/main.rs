@@ -407,6 +407,10 @@ impl Card {
             .collect()
     }
 
+    fn from_output_widget_i_to_node_front_link_i(&self, wid_i: usize) -> usize {
+        wid_i - (self.widgets.len() - self.copy_output_widgets().len())
+    }
+
     fn update(
         &mut self,
         rl: &RaylibHandle,
@@ -657,12 +661,8 @@ impl CanvasScene {
                             .distance_to(c.pos)
                             < 10.
                         {
-                            let node_output_i = i
-                                - (self.copy_card_data_from_id(ref_id.clone()).widgets.len()
-                                    - self
-                                        .copy_card_data_from_id(ref_id.clone())
-                                        .copy_output_widgets()
-                                        .len());
+                            let node_output_i =
+                                c.from_output_widget_i_to_node_front_link_i(i.clone());
 
                             for n in &mut self.node_pool {
                                 if n.id == ref_id.clone() {
@@ -679,8 +679,8 @@ impl CanvasScene {
             _ => unimplemented!("{:?}", self.mouse_sate),
         }
 
-        for i in self.cards.iter_mut() {
-            let notify = i.update(rl, last_mouse_pos, self.cam.zoom, &self.cam);
+        for c in self.cards.iter_mut() {
+            let notify = c.update(rl, last_mouse_pos, self.cam.zoom, &self.cam);
 
             match notify {
                 Some(notification_type) => match notification_type {
@@ -697,7 +697,16 @@ impl CanvasScene {
                             Some(CardNotification::ToggleCheckBox { id, node_member });
                     }
                     CardNotification::CreatingCardConnection(id, i) => {
-                        self.mouse_sate = CanvasMouseState::CreatingConnection(id, i);
+                        self.mouse_sate = CanvasMouseState::CreatingConnection(id.clone(), i);
+
+                        let output_i = c.from_output_widget_i_to_node_front_link_i(i);
+
+                        for n in &mut self.node_pool {
+                            if n.id == id.clone() {
+                                n.front_links[output_i] = "".to_string();
+                                return;
+                            }
+                        }
                         return;
                     }
                     _ => {
