@@ -6,6 +6,7 @@ use raylib::prelude::*;
 enum CanvasMouseState {
     Roaming,
     CreatingConnection(String, usize), //id, output_index
+    MovingCard(String),
 }
 
 #[derive(Clone, Debug)]
@@ -258,6 +259,7 @@ enum CardNotification {
     AddOptionToOptionsNode(String),
     ToggleCheckBox { id: String, node_member: NodeMember },
     CreatingCardConnection(String, usize), // id, output index
+    MovingCard(String),
 }
 
 impl Card {
@@ -421,6 +423,19 @@ impl Card {
         let mouse_world_pos = rl.get_screen_to_world2D(rl.get_mouse_position(), cam);
 
         if rl.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
+            // Adapted from 2d camera_mouse_zoom found at: https://www.raylib.com/examples.html
+            let mouse_x = mouse_world_pos.x as i32;
+            let mouse_y = mouse_world_pos.y as i32;
+
+            let pos_x = self.pos.x as i32;
+            let pos_y = self.pos.y as i32;
+
+            if mouse_x > pos_x && mouse_x < (pos_x + self.size.x as i32) {
+                if mouse_y + 12 > pos_y && mouse_y - 12 < pos_y {
+                    return Some(CardNotification::MovingCard(self.node_ref.clone()));
+                }
+            }
+
             for (wid_i, wid) in self.widgets.iter().enumerate() {
                 if wid.was_clicked(self.pos + wid.offset, mouse_world_pos) {
                     match wid.widget_type {
@@ -447,24 +462,6 @@ impl Card {
                             println!("TODO: Handle was_clicked for '{:?}'", wid.widget_type);
                         }
                     }
-                }
-            }
-        }
-
-        // Adapted from 2d camera_mouse_zoom found at: https://www.raylib.com/examples.html
-        if rl.is_mouse_button_down(MouseButton::MOUSE_LEFT_BUTTON) {
-            let mouse_x = mouse_world_pos.x as i32;
-            let mouse_y = mouse_world_pos.y as i32;
-
-            let pos_x = self.pos.x as i32;
-            let pos_y = self.pos.y as i32;
-
-            if mouse_x > pos_x && mouse_x < (pos_x + self.size.x as i32) {
-                if mouse_y + 12 > pos_y && mouse_y - 12 < pos_y {
-                    let mut delta = *mouse_pos - rl.get_mouse_position();
-                    delta.scale(-1. / cur_zoom);
-
-                    self.pos = self.pos + delta;
                 }
             }
         }
@@ -635,6 +632,28 @@ struct CanvasScene {
 }
 
 impl CanvasScene {
+    fn get_node_ref_from_id<'a>(&'a mut self, id: String) -> &'a mut Node {
+        for n in &mut self.node_pool {
+            if n.id == id {
+                return n;
+            }
+        }
+
+        unreachable!()
+    }
+
+    fn get_card_i_by_id(&self, id: String) -> usize {
+        let mut i = 0;
+        for c in &self.cards {
+            if c.node_ref == id {
+                return i;
+            }
+            i += 1;
+        }
+
+        unreachable!()
+    }
+
     fn update(&mut self, rl: &RaylibHandle, last_mouse_pos: &mut Vector2) {
         match &self.state {
             CanvasSceneStates::Roaming => {
@@ -653,6 +672,8 @@ impl CanvasScene {
             CanvasMouseState::CreatingConnection(ref_id, i) => {
                 if rl.is_mouse_button_released(MouseButton::MOUSE_LEFT_BUTTON) {
                     // TODO: Create function that gets the position of the card input
+
+                    let mut found = "".to_string();
                     for c in &self.cards {
                         // found the card it will be linked to, it's c
                         // writing this code made my head hurt
@@ -661,20 +682,37 @@ impl CanvasScene {
                             .distance_to(c.pos)
                             < 10.
                         {
-                            let node_output_i =
-                                c.from_output_widget_i_to_node_front_link_i(i.clone());
-
-                            for n in &mut self.node_pool {
-                                if n.id == ref_id.clone() {
-                                    n.front_links[node_output_i] = c.node_ref.clone();
-                                }
-                            }
+                            found = c.node_ref.clone();
+                            break;
                         }
+                    }
+                    if found != "".to_string() {
+                        // this is getting too confusing
+                        let node_output_i = self
+                            .copy_card_data_from_id(ref_id.clone())
+                            .from_output_widget_i_to_node_front_link_i(i.clone());
+
+                        self.get_node_ref_from_id(ref_id.to_string()).front_links[node_output_i] = found;
                     }
 
                     self.mouse_sate = CanvasMouseState::Roaming;
                 }
                 return;
+            }
+            CanvasMouseState::MovingCard(id) => {
+                // FIXME: strange behavior when moving card and camera at the same time
+                let mut delta = rl.get_mouse_position() - *last_mouse_pos;
+                delta.scale(-1. / self.cam.zoom);
+
+                for c in &mut self.cards {
+                    if c.node_ref == id.clone() {
+                        c.pos -= delta;
+                    }
+                }
+
+                if rl.is_mouse_button_released(MouseButton::MOUSE_LEFT_BUTTON) {
+                    self.mouse_sate = CanvasMouseState::Roaming;
+                }
             }
             _ => unimplemented!("{:?}", self.mouse_sate),
         }
@@ -701,12 +739,11 @@ impl CanvasScene {
 
                         let output_i = c.from_output_widget_i_to_node_front_link_i(i);
 
-                        for n in &mut self.node_pool {
-                            if n.id == id.clone() {
-                                n.front_links[output_i] = "".to_string();
-                                return;
-                            }
-                        }
+                        self.get_node_ref_from_id(id).front_links[output_i] = "".to_string();
+                        return;
+                    }
+                    CardNotification::MovingCard(id) => {
+                        self.mouse_sate = CanvasMouseState::MovingCard(id);
                         return;
                     }
                     _ => {
@@ -722,15 +759,8 @@ impl CanvasScene {
             Some(notification) => match notification {
                 CardNotification::AddOptionToOptionsNode(id) => {
                     let pos = self.copy_card_data_from_id(id.clone()).pos;
-                    let mut i = 0;
-                    for j in &self.node_pool {
-                        if j.id == id {
-                            break;
-                        }
-                        i += 1;
-                    }
 
-                    let mut cur_node = &mut self.node_pool[i];
+                    let mut cur_node = self.get_node_ref_from_id(id.clone());
                     let mut next_node_opt_vec = cur_node.options.clone().unwrap();
                     next_node_opt_vec.push("Empty".to_string());
                     cur_node.options = Some(next_node_opt_vec);
@@ -744,6 +774,7 @@ impl CanvasScene {
                         pos,
                     );
 
+                    let i = self.get_card_i_by_id(id);
                     self.cards[i] = new_card;
                 }
                 CardNotification::ToggleCheckBox { id, node_member } => {
