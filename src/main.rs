@@ -413,13 +413,7 @@ impl Card {
         wid_i - (self.widgets.len() - self.copy_output_widgets().len())
     }
 
-    fn update(
-        &mut self,
-        rl: &RaylibHandle,
-        mouse_pos: &Vector2,
-        cur_zoom: f32,
-        cam: &Camera2D,
-    ) -> Option<CardNotification> {
+    fn update(&mut self, rl: &RaylibHandle, cam: &Camera2D) -> Option<CardNotification> {
         let mouse_world_pos = rl.get_screen_to_world2D(rl.get_mouse_position(), cam);
 
         if rl.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
@@ -452,7 +446,6 @@ impl Card {
                             });
                         }
                         WidgetType::OutputConnection => {
-                            let o = self.copy_output_widgets();
                             return Some(CardNotification::CreatingCardConnection(
                                 wid.node_ref.clone(),
                                 wid_i,
@@ -632,9 +625,9 @@ struct CanvasScene {
 }
 
 impl CanvasScene {
-    fn get_node_ref_from_id<'a>(&'a mut self, id: String) -> &'a mut Node {
+    fn get_node_ref<'a>(&'a mut self, id: &String) -> &'a mut Node {
         for n in &mut self.node_pool {
-            if n.id == id {
+            if n.id == id.as_str() {
                 return n;
             }
         }
@@ -642,7 +635,7 @@ impl CanvasScene {
         unreachable!()
     }
 
-    fn get_card_i_by_id(&self, id: String) -> usize {
+    fn get_card(&self, id: String) -> usize {
         let mut i = 0;
         for c in &self.cards {
             if c.node_ref == id {
@@ -652,6 +645,10 @@ impl CanvasScene {
         }
 
         unreachable!()
+    }
+
+    fn get_mouse_world_pos(&self, rl: &RaylibHandle) -> Vector2 {
+        rl.get_screen_to_world2D(rl.get_mouse_position(), self.cam)
     }
 
     fn update(&mut self, rl: &RaylibHandle, last_mouse_pos: &mut Vector2) {
@@ -677,11 +674,7 @@ impl CanvasScene {
                     for c in &self.cards {
                         // found the card it will be linked to, it's c
                         // writing this code made my head hurt
-                        if rl
-                            .get_screen_to_world2D(rl.get_mouse_position(), self.cam)
-                            .distance_to(c.pos)
-                            < 10.
-                        {
+                        if self.get_mouse_world_pos(rl).distance_to(c.pos) < 10. {
                             found = c.node_ref.clone();
                             break;
                         }
@@ -689,10 +682,10 @@ impl CanvasScene {
                     if found != "".to_string() {
                         // this is getting too confusing
                         let node_output_i = self
-                            .copy_card_data_from_id(ref_id.clone())
+                            .copy_card_data(&ref_id)
                             .from_output_widget_i_to_node_front_link_i(i.clone());
 
-                        self.get_node_ref_from_id(ref_id.to_string()).front_links[node_output_i] = found;
+                        self.get_node_ref(&ref_id.clone()).front_links[node_output_i] = found;
                     }
 
                     self.mouse_sate = CanvasMouseState::Roaming;
@@ -705,7 +698,7 @@ impl CanvasScene {
                 delta.scale(-1. / self.cam.zoom);
 
                 for c in &mut self.cards {
-                    if c.node_ref == id.clone() {
+                    if c.node_ref == id.as_str() {
                         c.pos -= delta;
                     }
                 }
@@ -718,7 +711,7 @@ impl CanvasScene {
         }
 
         for c in self.cards.iter_mut() {
-            let notify = c.update(rl, last_mouse_pos, self.cam.zoom, &self.cam);
+            let notify = c.update(rl, &self.cam);
 
             match notify {
                 Some(notification_type) => match notification_type {
@@ -739,7 +732,7 @@ impl CanvasScene {
 
                         let output_i = c.from_output_widget_i_to_node_front_link_i(i);
 
-                        self.get_node_ref_from_id(id).front_links[output_i] = "".to_string();
+                        self.get_node_ref(&id).front_links[output_i] = "".to_string();
                         return;
                     }
                     CardNotification::MovingCard(id) => {
@@ -758,9 +751,9 @@ impl CanvasScene {
             None => {}
             Some(notification) => match notification {
                 CardNotification::AddOptionToOptionsNode(id) => {
-                    let pos = self.copy_card_data_from_id(id.clone()).pos;
+                    let pos = self.copy_card_data(&id).pos;
 
-                    let mut cur_node = self.get_node_ref_from_id(id.clone());
+                    let mut cur_node = self.get_node_ref(&id);
                     let mut next_node_opt_vec = cur_node.options.clone().unwrap();
                     next_node_opt_vec.push("Empty".to_string());
                     cur_node.options = Some(next_node_opt_vec);
@@ -774,7 +767,7 @@ impl CanvasScene {
                         pos,
                     );
 
-                    let i = self.get_card_i_by_id(id);
+                    let i = self.get_card(id);
                     self.cards[i] = new_card;
                 }
                 CardNotification::ToggleCheckBox { id, node_member } => {
@@ -847,7 +840,7 @@ impl CanvasScene {
 
     pub fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
         for i in &self.cards {
-            i.draw(d, self.copy_node_data_from_id(i.node_ref.clone()));
+            i.draw(d, self.copy_node_data(&i.node_ref));
         }
     }
 
@@ -896,26 +889,20 @@ impl CanvasScene {
         match &self.state {
             CanvasSceneStates::EditingTextInput(wte, member) => match member {
                 NodeMember::Character => {
-                    cur_text = self.copy_node_data_from_id(wte.clone()).character.unwrap();
+                    cur_text = self.copy_node_data(&wte).character.unwrap();
                 }
                 NodeMember::Dialogue => {
-                    cur_text = self.copy_node_data_from_id(wte.clone()).dialogue.unwrap();
+                    cur_text = self.copy_node_data(&wte).dialogue.unwrap();
                 }
                 NodeMember::Options(i) => {
-                    let options_vec = &self.copy_node_data_from_id(wte.clone()).options.unwrap();
+                    let options_vec = &self.copy_node_data(&wte).options.unwrap();
                     cur_text = options_vec[*i].clone();
                 }
                 NodeMember::FlagToCheck => {
-                    cur_text = self
-                        .copy_node_data_from_id(wte.clone())
-                        .flag_to_check
-                        .unwrap();
+                    cur_text = self.copy_node_data(&wte).flag_to_check.unwrap();
                 }
                 NodeMember::FlagToSet => {
-                    cur_text = self
-                        .copy_node_data_from_id(wte.clone())
-                        .flag_to_set
-                        .unwrap();
+                    cur_text = self.copy_node_data(&wte).flag_to_set.unwrap();
                 }
                 _ => unimplemented!("{:?}", member),
             },
@@ -1028,18 +1015,18 @@ impl CanvasScene {
         }
     }
 
-    fn copy_card_data_from_id(&self, id: String) -> Card {
+    fn copy_card_data(&self, id: &String) -> Card {
         for i in &self.cards {
-            if i.node_ref == id {
+            if i.node_ref == id.as_str() {
                 return i.clone();
             }
         }
 
         unreachable!()
     }
-    fn copy_node_data_from_id(&self, id: String) -> Node {
+    fn copy_node_data(&self, id: &String) -> Node {
         for i in &self.node_pool {
-            if i.id == id {
+            if i.id == id.as_str() {
                 return i.clone();
             }
         }
@@ -1049,7 +1036,7 @@ impl CanvasScene {
 
     fn draw_card_connections(&self, d: &mut RaylibMode2D<RaylibDrawHandle>) {
         for i in &self.node_pool {
-            let i_card = self.copy_card_data_from_id(i.id.clone());
+            let i_card = self.copy_card_data(&i.id);
             let outputs = i_card.copy_output_widgets();
 
             if i.front_links.len() != outputs.len() {
@@ -1064,21 +1051,21 @@ impl CanvasScene {
                 }
 
                 let start_pos = i_card.pos + outputs[j].offset;
-                let end_pos = self.copy_card_data_from_id(i.front_links[j].clone()).pos;
+                let end_pos = self.copy_card_data(&i.front_links[j]).pos;
                 d.draw_line_ex(start_pos, end_pos, 5., Color::PURPLE);
             }
         }
 
         match &self.mouse_sate {
             CanvasMouseState::CreatingConnection(id, i) => {
-                let start_pos = self.copy_card_data_from_id(id.clone()).pos
+                let start_pos = self.copy_card_data(id).pos
                     + self
-                        .copy_card_data_from_id(id.clone())
+                        .copy_card_data(id)
                         .widgets
                         .get(i.clone())
                         .unwrap()
                         .offset;
-                let end_pos = d.get_screen_to_world2D(d.get_mouse_position(), self.cam);
+                let end_pos = self.get_mouse_world_pos(d);
                 d.draw_line_ex(start_pos, end_pos, 5., Color::PURPLE);
             }
             _ => {}
