@@ -410,7 +410,24 @@ impl Card {
     }
 
     fn from_output_widget_i_to_node_front_link_i(&self, wid_i: &usize) -> usize {
-        wid_i - (self.widgets.len() - self.copy_output_widgets().len())
+        // wid_i - (self.widgets.len() - self.copy_output_widgets().len()) 
+        // this only works if the outputs are in the end of the widgets, I'll have to make a more naive function
+
+        let mut cur_i = 0;
+        let mut cur_found_output = -1;
+        for w in &self.widgets {
+            if w.widget_type == WidgetType::OutputConnection {
+                cur_found_output += 1;
+            }
+
+            if cur_i as usize == wid_i.clone() {
+                return cur_found_output as usize;
+            }
+
+            cur_i += 1;
+        }
+
+        unreachable!()
     }
 
     fn update(&mut self, rl: &RaylibHandle, cam: &Camera2D) -> Option<CardNotification> {
@@ -621,7 +638,11 @@ struct CanvasScene {
     cards: Vec<Card>,
     node_pool: Vec<Node>,
     state: CanvasSceneStates,
+
+    // mouse state
+    // TODO: Maybe move the mouse state to a separate struct
     mouse_sate: CanvasMouseState,
+    last_time_mouse_pressed: f32,
 }
 
 impl CanvasScene {
@@ -635,7 +656,7 @@ impl CanvasScene {
         unreachable!()
     }
 
-    fn get_card(&self, id: String) -> usize {
+    fn get_card_i(&self, id: String) -> usize {
         let mut i = 0;
         for c in &self.cards {
             if c.node_ref == id {
@@ -652,6 +673,8 @@ impl CanvasScene {
     }
 
     fn update(&mut self, rl: &RaylibHandle, last_mouse_pos: &mut Vector2) {
+        self.last_time_mouse_pressed += rl.get_frame_time();
+
         match &self.state {
             CanvasSceneStates::Roaming => {
                 self.update_roaming(rl, last_mouse_pos);
@@ -667,7 +690,9 @@ impl CanvasScene {
         match &self.mouse_sate {
             CanvasMouseState::Roaming => {}
             CanvasMouseState::CreatingConnection(ref_id, i) => {
-                if rl.is_mouse_button_released(MouseButton::MOUSE_LEFT_BUTTON) {
+                if rl.is_mouse_button_released(MouseButton::MOUSE_LEFT_BUTTON)
+                    && self.last_time_mouse_pressed > 0.5 // this check allows both ways of creating connection
+                {
                     // TODO: Create function that gets the position of the card input
 
                     let mut found = "".to_string();
@@ -728,6 +753,8 @@ impl CanvasScene {
                             Some(CardNotification::ToggleCheckBox { id, node_member });
                     }
                     CardNotification::CreatingCardConnection(id, i) => {
+                        self.last_time_mouse_pressed = 0.;
+
                         self.mouse_sate = CanvasMouseState::CreatingConnection(id.clone(), i);
 
                         let output_i = c.from_output_widget_i_to_node_front_link_i(&i);
@@ -767,7 +794,7 @@ impl CanvasScene {
                         pos,
                     );
 
-                    let i = self.get_card(id);
+                    let i = self.get_card_i(id);
                     self.cards[i] = new_card;
                 }
                 CardNotification::ToggleCheckBox { id, node_member } => {
@@ -1129,6 +1156,7 @@ fn main() {
         ],
         state: CanvasSceneStates::Roaming,
         mouse_sate: CanvasMouseState::Roaming,
+        last_time_mouse_pressed: 0.,
     };
     canvas_scene.parse_node_pool();
 
