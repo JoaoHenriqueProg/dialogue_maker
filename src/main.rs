@@ -265,7 +265,7 @@ enum CardNotification {
 }
 
 impl Card {
-    fn new_dialogue_card(node_id: String, pos: Vector2) -> Card {
+    fn new_dialogue(node_id: String, pos: Vector2) -> Card {
         Card {
             node_ref: node_id.clone(),
             pos: pos,
@@ -294,7 +294,7 @@ impl Card {
         }
     }
 
-    fn new_options_card(node_id: String, options: Vec<String>, pos: Vector2) -> Card {
+    fn new_options(node_id: String, options: Vec<String>, pos: Vector2) -> Card {
         let mut options_widgets = vec![];
 
         let mut y_offset = 10.;
@@ -334,7 +334,7 @@ impl Card {
         }
     }
 
-    fn new_conditional_card(node_id: String, pos: Vector2) -> Card {
+    fn new_conditional(node_id: String, pos: Vector2) -> Card {
         Card {
             node_ref: node_id.clone(),
             pos: pos,
@@ -373,7 +373,7 @@ impl Card {
         }
     }
 
-    fn new_set_flag_card(node_id: String, pos: Vector2) -> Card {
+    fn new_set_flag(node_id: String, pos: Vector2) -> Card {
         Card {
             node_ref: node_id.clone(),
             pos: pos,
@@ -877,7 +877,7 @@ impl CanvasScene {
                     next_node_exit_vec.push("".to_string());
                     cur_node.front_links = next_node_exit_vec;
 
-                    let new_card = Card::new_options_card(
+                    let new_card = Card::new_options(
                         cur_node.id.clone(),
                         cur_node.clone().options.unwrap(),
                         pos,
@@ -1105,12 +1105,12 @@ impl CanvasScene {
                 NodeTypes::Dialogue => {
                     let card_pos = Vector2 { x: x_offset, y: 0. };
                     self.cards
-                        .push(Card::new_dialogue_card(i.id.clone(), card_pos));
+                        .push(Card::new_dialogue(i.id.clone(), card_pos));
                     x_offset += 200.;
                 }
                 NodeTypes::Options => {
                     let card_pos = Vector2 { x: x_offset, y: 0. };
-                    self.cards.push(Card::new_options_card(
+                    self.cards.push(Card::new_options(
                         i.id.clone(),
                         i.clone().options.unwrap(),
                         card_pos,
@@ -1120,13 +1120,13 @@ impl CanvasScene {
                 NodeTypes::Conditional => {
                     let card_pos = Vector2 { x: x_offset, y: 0. };
                     self.cards
-                        .push(Card::new_conditional_card(i.id.clone(), card_pos));
+                        .push(Card::new_conditional(i.id.clone(), card_pos));
                     x_offset += 200.;
                 }
                 NodeTypes::SetFlag => {
                     let card_pos = Vector2 { x: x_offset, y: 0. };
                     self.cards
-                        .push(Card::new_set_flag_card(i.id.clone(), card_pos));
+                        .push(Card::new_set_flag(i.id.clone(), card_pos));
                     x_offset += 200.;
                 }
                 _ => unimplemented!("{:?}", i.node_type),
