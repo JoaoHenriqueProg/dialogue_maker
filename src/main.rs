@@ -1,5 +1,7 @@
 #![allow(unreachable_patterns)]
 
+use std::collections::HashMap;
+
 use raylib::prelude::*;
 
 #[derive(Debug)]
@@ -13,8 +15,8 @@ enum CanvasMouseState {
 enum NodeTypes {
     Dialogue,
     Options,
-    Conditional, // Noticed I didn't think enough about this one, decide to make it so that flags are only flags
     SetFlag,
+    Conditional, // Noticed I didn't think enough about this one, decide to make it so that flags are only flags
     SomethingHasGoneReallyWrong,
 }
 
@@ -636,15 +638,40 @@ enum CanvasContextMenuState {
 struct CanvasContextMenu {
     state: CanvasContextMenuState,
     pos: Vector2,
+    images: HashMap<String, Texture2D>,
 }
 
 impl CanvasContextMenu {
-    fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
+    fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>, cam: &Camera2D) {
         match self.state {
-            CanvasContextMenuState::Hidden => {},
+            CanvasContextMenuState::Hidden => {}
             CanvasContextMenuState::NewCard => {
-                d.draw_rectangle(self.pos.x as i32, self.pos.y as i32, 32, 32, Color::PINK);
-            },
+                d.draw_rectangle(self.pos.x as i32, self.pos.y as i32, 120, 30, Color::PINK);
+                d.draw_texture(
+                    self.images.get("new_card").unwrap(),
+                    self.pos.x as i32,
+                    self.pos.y as i32,
+                    Color::WHITE,
+                );
+
+                let m = d.get_screen_to_world2D(d.get_mouse_position(), cam);
+                let hovering = ((m - self.pos).x / 30.).floor() as i64;
+
+                if hovering < 4 && hovering >= 0 && m.y > self.pos.y && m.y < self.pos.y + 30. {
+                    d.draw_rectangle(
+                        self.pos.x as i32 + (hovering * 30) as i32,
+                        self.pos.y as i32,
+                        30,
+                        30,
+                        Color {
+                            r: 0,
+                            g: 0,
+                            b: 0,
+                            a: 50,
+                        },
+                    );
+                }
+            }
         }
     }
 }
@@ -909,7 +936,8 @@ impl CanvasScene {
             i.draw(d, self.copy_node_data(&i.node_ref));
         }
 
-        self.context_menu.draw(d);
+        self.draw_card_connections(d);
+        self.context_menu.draw(d, &self.cam);
     }
 
     // Yes, I diceded to go with some imediate ui here
@@ -1149,6 +1177,16 @@ fn main() {
 
     rl.set_target_fps(60);
 
+    // TODO: new() function for context menu
+    let mut cm_images = HashMap::new();
+    cm_images.insert(
+        "new_card".to_string(),
+        rl.load_texture_from_image(
+            &thread,
+            &Image::load_image("./assets/context_menu_new_card.png").unwrap(),
+        )
+        .unwrap(),
+    );
     let mut canvas_scene = CanvasScene {
         cam: Camera2D {
             offset: Vector2 {
@@ -1202,6 +1240,7 @@ fn main() {
         context_menu: CanvasContextMenu {
             state: CanvasContextMenuState::Hidden,
             pos: Vector2 { x: 0., y: 0. },
+            images: cm_images,
         },
     };
     canvas_scene.parse_node_pool();
@@ -1226,7 +1265,6 @@ fn main() {
 
         canvas_scene.draw_background(&mut new_d, tlp.clone(), brp.clone());
         canvas_scene.draw(&mut new_d);
-        canvas_scene.draw_card_connections(&mut new_d);
 
         // ===== IMGUI LIKE PART =====
         canvas_scene.update_and_draw_text_input_edit(&mut new_d, tlp); // Runs only if canvas state is EditingTextInput
