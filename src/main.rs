@@ -410,7 +410,7 @@ impl Card {
     }
 
     fn from_output_widget_i_to_node_front_link_i(&self, wid_i: &usize) -> usize {
-        // wid_i - (self.widgets.len() - self.copy_output_widgets().len()) 
+        // wid_i - (self.widgets.len() - self.copy_output_widgets().len())
         // this only works if the outputs are in the end of the widgets, I'll have to make a more naive function
 
         let mut cur_i = 0;
@@ -628,6 +628,27 @@ impl Card {
     }
 }
 
+enum CanvasContextMenuState {
+    Hidden,
+    NewCard,
+}
+
+struct CanvasContextMenu {
+    state: CanvasContextMenuState,
+    pos: Vector2,
+}
+
+impl CanvasContextMenu {
+    fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>) {
+        match self.state {
+            CanvasContextMenuState::Hidden => {},
+            CanvasContextMenuState::NewCard => {
+                d.draw_rectangle(self.pos.x as i32, self.pos.y as i32, 32, 32, Color::PINK);
+            },
+        }
+    }
+}
+
 enum CanvasSceneStates {
     Roaming,
     EditingTextInput(String, NodeMember), // Id the currently being modified Node
@@ -642,7 +663,10 @@ struct CanvasScene {
     // mouse state
     // TODO: Maybe move the mouse state to a separate struct
     mouse_sate: CanvasMouseState,
-    last_time_mouse_pressed: f32,
+    last_time_l_mouse_pressed: f32,
+    last_time_r_mouse_pressed: f32,
+
+    context_menu: CanvasContextMenu,
 }
 
 impl CanvasScene {
@@ -673,7 +697,8 @@ impl CanvasScene {
     }
 
     fn update(&mut self, rl: &RaylibHandle, last_mouse_pos: &mut Vector2) {
-        self.last_time_mouse_pressed += rl.get_frame_time();
+        self.last_time_l_mouse_pressed += rl.get_frame_time();
+        self.last_time_r_mouse_pressed += rl.get_frame_time();
 
         match &self.state {
             CanvasSceneStates::Roaming => {
@@ -687,11 +712,20 @@ impl CanvasScene {
     pub fn update_roaming(&mut self, rl: &RaylibHandle, last_mouse_pos: &mut Vector2) {
         let mut post_handle_notification = None;
 
+        // mouse update
         match &self.mouse_sate {
-            CanvasMouseState::Roaming => {}
+            CanvasMouseState::Roaming => {
+                if rl.is_mouse_button_released(MouseButton::MOUSE_RIGHT_BUTTON) {
+                    if self.last_time_r_mouse_pressed < 0.2 {
+                        self.context_menu.pos = self.get_mouse_world_pos(rl);
+                        self.context_menu.state = CanvasContextMenuState::NewCard;
+                    }
+                }
+            }
             CanvasMouseState::CreatingConnection(ref_id, i) => {
                 if rl.is_mouse_button_released(MouseButton::MOUSE_LEFT_BUTTON)
-                    && self.last_time_mouse_pressed > 0.5 // this check allows both ways of creating connection
+                    && self.last_time_l_mouse_pressed > 0.5
+                // this check allows both ways of creating connection
                 {
                     // TODO: Create function that gets the position of the card input
 
@@ -735,6 +769,13 @@ impl CanvasScene {
             _ => unimplemented!("{:?}", self.mouse_sate),
         }
 
+        if rl.is_mouse_button_pressed(MouseButton::MOUSE_RIGHT_BUTTON) {
+            self.last_time_r_mouse_pressed = 0.;
+        }
+        if rl.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
+            self.last_time_l_mouse_pressed = 0.;
+        }
+
         for c in self.cards.iter_mut() {
             let notify = c.update(rl, &self.cam);
 
@@ -753,8 +794,6 @@ impl CanvasScene {
                             Some(CardNotification::ToggleCheckBox { id, node_member });
                     }
                     CardNotification::CreatingCardConnection(id, i) => {
-                        self.last_time_mouse_pressed = 0.;
-
                         self.mouse_sate = CanvasMouseState::CreatingConnection(id.clone(), i);
 
                         let output_i = c.from_output_widget_i_to_node_front_link_i(&i);
@@ -869,6 +908,8 @@ impl CanvasScene {
         for i in &self.cards {
             i.draw(d, self.copy_node_data(&i.node_ref));
         }
+
+        self.context_menu.draw(d);
     }
 
     // Yes, I diceded to go with some imediate ui here
@@ -1156,7 +1197,12 @@ fn main() {
         ],
         state: CanvasSceneStates::Roaming,
         mouse_sate: CanvasMouseState::Roaming,
-        last_time_mouse_pressed: 0.,
+        last_time_l_mouse_pressed: 0.,
+        last_time_r_mouse_pressed: 0.,
+        context_menu: CanvasContextMenu {
+            state: CanvasContextMenuState::Hidden,
+            pos: Vector2 { x: 0., y: 0. },
+        },
     };
     canvas_scene.parse_node_pool();
 
