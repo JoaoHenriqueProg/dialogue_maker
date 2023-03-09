@@ -829,19 +829,48 @@ impl CanvasScene {
         match context_menu_notification {
             None => {}
             Some(notification) => match notification {
-                CanvasContextMenuNotification::CreateNewCard(node_type) => match node_type {
-                    NodeTypes::Dialogue => {
-                        let new_id = self.get_free_node_id();
-                        let mut new_node = Node::default_dialogue();
-                        new_node.id = new_id.clone();
-                        new_node.front_links = vec!["".to_string()];
-                        self.node_pool.push(new_node);
+                CanvasContextMenuNotification::CreateNewCard(node_type) => {
+                    let new_id = self.get_free_node_id();
+                    match node_type {
+                        NodeTypes::Dialogue => {
+                            let mut new_node = Node::default_dialogue();
+                            new_node.id = new_id.clone();
+                            new_node.front_links = vec!["".to_string()];
+                            self.node_pool.push(new_node);
 
-                        let new_card = Card::new_dialogue(new_id, self.get_mouse_world_pos(rl));
-                        self.cards.push(new_card);
+                            let new_card = Card::new_dialogue(new_id, self.get_mouse_world_pos(rl));
+                            self.cards.push(new_card);
+                        }
+                        NodeTypes::Options => {
+                            let mut new_node = Node::default_options();
+                            new_node.id = new_id.clone();
+                            self.node_pool.push(new_node);
+
+                            let new_card = Card::new_options(new_id, vec![], self.get_mouse_world_pos(rl));
+                            self.cards.push(new_card);
+                        }
+                        NodeTypes::SetFlag => {
+                            let mut new_node = Node::default_set_flag();
+                            new_node.id = new_id.clone();
+                            new_node.front_links = vec!["".to_string()];
+                            self.node_pool.push(new_node);
+
+                            let new_card = Card::new_set_flag(new_id,  self.get_mouse_world_pos(rl));
+                            self.cards.push(new_card);
+                        }
+                        NodeTypes::Conditional => {
+                            let mut new_node = Node::default_conditional();
+                            new_node.id = new_id.clone();
+                            new_node.front_links = vec!["".to_string(), "".to_string(), "".to_string()];
+                            self.node_pool.push(new_node);
+
+                            let new_card = Card::new_conditional(new_id,  self.get_mouse_world_pos(rl));
+                            self.cards.push(new_card);
+                        }
+
+                        _ => unimplemented!("{:?}", node_type),
                     }
-                    _ => unimplemented!("{:?}", node_type),
-                },
+                }
             },
         }
 
