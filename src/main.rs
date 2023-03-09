@@ -635,6 +635,10 @@ enum CanvasContextMenuState {
     NewCard,
 }
 
+enum CanvasContextMenuNotification {
+    CreateNewCard(NodeTypes),
+}
+
 struct CanvasContextMenu {
     state: CanvasContextMenuState,
     pos: Vector2,
@@ -642,9 +646,13 @@ struct CanvasContextMenu {
 }
 
 impl CanvasContextMenu {
-    fn update(&mut self, d: &RaylibHandle, m_w_pos: Vector2) {
+    fn update(
+        &mut self,
+        d: &RaylibHandle,
+        m_w_pos: Vector2,
+    ) -> Option<CanvasContextMenuNotification> {
         if !d.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
-            return;
+            return None;
         }
 
         match self.state {
@@ -657,10 +665,41 @@ impl CanvasContextMenu {
                     || m_w_pos.y > self.pos.y + 30.
                 {
                     self.state = CanvasContextMenuState::Hidden;
-                    return;
+                    return None;
+                }
+
+                match hovering {
+                    0 => {
+                        self.state = CanvasContextMenuState::Hidden;
+                        return Some(CanvasContextMenuNotification::CreateNewCard(
+                            NodeTypes::Dialogue,
+                        ));
+                    }
+                    1 => {
+                        self.state = CanvasContextMenuState::Hidden;
+                        return Some(CanvasContextMenuNotification::CreateNewCard(
+                            NodeTypes::Options,
+                        ));
+                    }
+                    2 => {
+                        self.state = CanvasContextMenuState::Hidden;
+                        return Some(CanvasContextMenuNotification::CreateNewCard(
+                            NodeTypes::SetFlag,
+                        ));
+                    }
+                    3 => {
+                        self.state = CanvasContextMenuState::Hidden;
+                        return Some(CanvasContextMenuNotification::CreateNewCard(
+                            NodeTypes::Conditional,
+                        ));
+                    }
+                    _ => {
+                        panic!()
+                    }
                 }
             }
         }
+        return None;
     }
 
     fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>, cam: &Camera2D) {
@@ -718,6 +757,34 @@ struct CanvasScene {
 }
 
 impl CanvasScene {
+    fn get_free_node_id(&self) -> String {
+        for i in 1..999 {
+            let mut cur_i = "".to_string();
+            if i < 10 {
+                cur_i.push_str("00");
+                cur_i.push_str(&i.to_string());
+            } else if i < 100 {
+                cur_i.push_str("0");
+                cur_i.push_str(&i.to_string());
+            } else {
+                cur_i.push_str(&i.to_string());
+            }
+
+            let mut is_free = true;
+            'j_loop: for j in &self.node_pool {
+                if j.id == cur_i {
+                    is_free = false;
+                    break 'j_loop;
+                }
+            }
+
+            if is_free {
+                return cur_i;
+            }
+        }
+        return "0".to_string();
+    }
+
     fn get_node_ref<'a>(&'a mut self, id: &String) -> &'a mut Node {
         for n in &mut self.node_pool {
             if n.id == id.as_str() {
@@ -758,8 +825,26 @@ impl CanvasScene {
     }
 
     pub fn update_roaming(&mut self, rl: &RaylibHandle, last_mouse_pos: &mut Vector2) {
-        self.context_menu.update(rl, self.get_mouse_world_pos(rl));
-        
+        let context_menu_notification = self.context_menu.update(rl, self.get_mouse_world_pos(rl));
+        match context_menu_notification {
+            None => {}
+            Some(notification) => match notification {
+                CanvasContextMenuNotification::CreateNewCard(node_type) => match node_type {
+                    NodeTypes::Dialogue => {
+                        let new_id = self.get_free_node_id();
+                        let mut new_node = Node::default_dialogue();
+                        new_node.id = new_id.clone();
+                        new_node.front_links = vec!["".to_string()];
+                        self.node_pool.push(new_node);
+
+                        let new_card = Card::new_dialogue(new_id, self.get_mouse_world_pos(rl));
+                        self.cards.push(new_card);
+                    }
+                    _ => unimplemented!("{:?}", node_type),
+                },
+            },
+        }
+
         let mut post_handle_notification = None;
 
         // mouse update
@@ -1104,8 +1189,7 @@ impl CanvasScene {
             match i.node_type {
                 NodeTypes::Dialogue => {
                     let card_pos = Vector2 { x: x_offset, y: 0. };
-                    self.cards
-                        .push(Card::new_dialogue(i.id.clone(), card_pos));
+                    self.cards.push(Card::new_dialogue(i.id.clone(), card_pos));
                     x_offset += 200.;
                 }
                 NodeTypes::Options => {
@@ -1125,8 +1209,7 @@ impl CanvasScene {
                 }
                 NodeTypes::SetFlag => {
                     let card_pos = Vector2 { x: x_offset, y: 0. };
-                    self.cards
-                        .push(Card::new_set_flag(i.id.clone(), card_pos));
+                    self.cards.push(Card::new_set_flag(i.id.clone(), card_pos));
                     x_offset += 200.;
                 }
                 _ => unimplemented!("{:?}", i.node_type),
