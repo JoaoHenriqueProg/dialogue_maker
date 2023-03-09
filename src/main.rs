@@ -642,6 +642,27 @@ struct CanvasContextMenu {
 }
 
 impl CanvasContextMenu {
+    fn update(&mut self, d: &RaylibHandle, m_w_pos: Vector2) {
+        if !d.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
+            return;
+        }
+
+        match self.state {
+            CanvasContextMenuState::Hidden => {}
+            CanvasContextMenuState::NewCard => {
+                let hovering = ((m_w_pos - self.pos).x / 30.).floor() as i64;
+                if hovering > 3
+                    || hovering < 0
+                    || m_w_pos.y < self.pos.y
+                    || m_w_pos.y > self.pos.y + 30.
+                {
+                    self.state = CanvasContextMenuState::Hidden;
+                    return;
+                }
+            }
+        }
+    }
+
     fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>, cam: &Camera2D) {
         match self.state {
             CanvasContextMenuState::Hidden => {}
@@ -737,6 +758,8 @@ impl CanvasScene {
     }
 
     pub fn update_roaming(&mut self, rl: &RaylibHandle, last_mouse_pos: &mut Vector2) {
+        self.context_menu.update(rl, self.get_mouse_world_pos(rl));
+        
         let mut post_handle_notification = None;
 
         // mouse update
