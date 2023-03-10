@@ -1334,39 +1334,39 @@ fn main() {
         },
         cards: Vec::default(),
         node_pool: vec![
-            Node::new_dialogue(
-                "001",
-                "John doe",
-                "Test test testing",
-                vec!["002".to_string()],
-            ),
-            Node::new_dialogue(
-                "002",
-                "Second one coming",
-                "I really hope this doesn't break everything.",
-                vec!["003".to_string()],
-            ),
-            Node::new_options(
-                "003",
-                vec![
-                    "Hi".to_string(),
-                    "Bye".to_string(),
-                    "Let's go".to_string(),
-                    "To the conditionals!".to_string(),
-                ],
-                vec![
-                    "001".to_string(),
-                    "002".to_string(),
-                    "003".to_string(),
-                    "004".to_string(),
-                ],
-            ),
-            Node::new_conditional(
-                "004",
-                "FLAG1",
-                vec!["001".to_string(), "".to_string(), "003".to_string()],
-            ),
-            Node::new_set_flag("005", "FLAG1", true, vec!["".to_string()]),
+            // Node::new_dialogue(
+            //     "001",
+            //     "John doe",
+            //     "Test test testing",
+            //     vec!["002".to_string()],
+            // ),
+            // Node::new_dialogue(
+            //     "002",
+            //     "Second one coming",
+            //     "I really hope this doesn't break everything.",
+            //     vec!["003".to_string()],
+            // ),
+            // Node::new_options(
+            //     "003",
+            //     vec![
+            //         "Hi".to_string(),
+            //         "Bye".to_string(),
+            //         "Let's go".to_string(),
+            //         "To the conditionals!".to_string(),
+            //     ],
+            //     vec![
+            //         "001".to_string(),
+            //         "002".to_string(),
+            //         "003".to_string(),
+            //         "004".to_string(),
+            //     ],
+            // ),
+            // Node::new_conditional(
+            //     "004",
+            //     "FLAG1",
+            //     vec!["001".to_string(), "".to_string(), "003".to_string()],
+            // ),
+            // Node::new_set_flag("005", "FLAG1", true, vec!["".to_string()]),
         ],
         state: CanvasSceneStates::Roaming,
         mouse_sate: CanvasMouseState::Roaming,
