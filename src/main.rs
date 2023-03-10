@@ -758,31 +758,19 @@ struct CanvasScene {
 
 impl CanvasScene {
     fn get_free_node_id(&self) -> String {
-        for i in 1..999 {
-            let mut cur_i = "".to_string();
-            if i < 10 {
-                cur_i.push_str("00");
-                cur_i.push_str(&i.to_string());
-            } else if i < 100 {
-                cur_i.push_str("0");
-                cur_i.push_str(&i.to_string());
-            } else {
-                cur_i.push_str(&i.to_string());
-            }
+        'outer_loop: for i in 1..999 {
+            let cur_i = format!("{:0>5}", i.to_string());
 
-            let mut is_free = true;
-            'j_loop: for j in &self.node_pool {
+            for j in &self.node_pool {
                 if j.id == cur_i {
-                    is_free = false;
-                    break 'j_loop;
+                    continue 'outer_loop
                 }
             }
 
-            if is_free {
-                return cur_i;
-            }
+            return cur_i;
         }
-        return "0".to_string();
+
+        panic!("There isn't enough ids.");
     }
 
     fn get_node_ref<'a>(&'a mut self, id: &String) -> &'a mut Node {
@@ -846,25 +834,29 @@ impl CanvasScene {
                             new_node.id = new_id.clone();
                             self.node_pool.push(new_node);
 
-                            let new_card = Card::new_options(new_id, vec![], self.get_mouse_world_pos(rl));
+                            let new_card =
+                                Card::new_options(new_id, vec![], self.get_mouse_world_pos(rl));
                             self.cards.push(new_card);
                         }
                         NodeTypes::SetFlag => {
                             let mut new_node = Node::default_set_flag();
                             new_node.id = new_id.clone();
                             new_node.front_links = vec!["".to_string()];
+                            new_node.flag_to_set = Some("".to_string());
                             self.node_pool.push(new_node);
 
-                            let new_card = Card::new_set_flag(new_id,  self.get_mouse_world_pos(rl));
+                            let new_card = Card::new_set_flag(new_id, self.get_mouse_world_pos(rl));
                             self.cards.push(new_card);
                         }
                         NodeTypes::Conditional => {
                             let mut new_node = Node::default_conditional();
                             new_node.id = new_id.clone();
-                            new_node.front_links = vec!["".to_string(), "".to_string(), "".to_string()];
+                            new_node.front_links =
+                                vec!["".to_string(), "".to_string(), "".to_string()];
                             self.node_pool.push(new_node);
 
-                            let new_card = Card::new_conditional(new_id,  self.get_mouse_world_pos(rl));
+                            let new_card =
+                                Card::new_conditional(new_id, self.get_mouse_world_pos(rl));
                             self.cards.push(new_card);
                         }
 
