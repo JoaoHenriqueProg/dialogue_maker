@@ -758,8 +758,8 @@ struct CanvasScene {
 
 impl CanvasScene {
     fn get_free_node_id(&self) -> String {
-        'outer_loop: for i in 1..999 {
-            let cur_i = format!("{:0>5}", i.to_string());
+        'outer_loop: for i in 1..99999 {
+            let cur_i = format!("{:0>5}", i.to_string()); // i with left 0 tabs
 
             for j in &self.node_pool {
                 if j.id == cur_i {
