@@ -2,6 +2,8 @@
 
 A program to create dialogue trees and paths, in a style similar to unreal's blueprint, godot's (old) visual programming and blender's node system.
 
+There are some problems when exporting the project to WASM, hopefully in the future it'll be possible to try it out online!
+
 ## How to use:
 
 Right click anywhere in the canvas to open context menu and add a new card. Edit them and have fun!
