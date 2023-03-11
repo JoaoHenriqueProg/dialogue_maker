@@ -179,14 +179,14 @@ impl Widget {
     fn draw(
         &self,
         d: &mut RaylibMode2D<'_, RaylibDrawHandle>,
-        card_in_world_origin_pos: Vector2,
+        card_world_pos: Vector2,
         text: Option<String>,
         check_box_state: Option<bool>,
     ) {
+        let x_pos = (card_world_pos.x + self.offset.x) as i32;
+        let y_pos = (card_world_pos.y + self.offset.y) as i32;
         match self.widget_type {
             WidgetType::TextInput => {
-                let x_pos = (card_in_world_origin_pos.x + self.offset.x) as i32;
-                let y_pos = (card_in_world_origin_pos.y + self.offset.y) as i32;
                 d.draw_rectangle(x_pos, y_pos, 150, 25, Color::GRAY);
                 d.draw_rectangle(x_pos + 1, y_pos + 1, 148, 23, Color::WHITE);
                 let mut text_to_show = text.unwrap();
@@ -196,18 +196,12 @@ impl Widget {
                 }
                 d.draw_text(&text_to_show, x_pos + 3, y_pos + 3, 19, Color::BLACK)
             }
-            WidgetType::OutputConnection => {
-                let x_pos = (card_in_world_origin_pos.x + self.offset.x) as i32;
-                let y_pos = (card_in_world_origin_pos.y + self.offset.y) as i32;
-                d.draw_circle(x_pos, y_pos, 10., Color::GREEN)
-            }
+            WidgetType::OutputConnection => d.draw_circle(x_pos, y_pos, 10., Color::GREEN),
             WidgetType::CheckBox => {
-                let x_pos = (card_in_world_origin_pos.x + self.offset.x) as i32;
-                let y_pos = (card_in_world_origin_pos.y + self.offset.y) as i32;
                 d.draw_rectangle(x_pos, y_pos, 25, 25, Color::GRAY);
 
                 let mut color = Color::WHITE;
-                if check_box_state.clone().unwrap() {
+                if check_box_state.unwrap() {
                     color = Color::GREEN;
                 }
 
@@ -232,13 +226,13 @@ impl Widget {
             _ => unimplemented!("{:?}", self.widget_type),
         };
 
-        let origin_x = in_world_origin_pos.x as i32;
-        let origin_y = in_world_origin_pos.y as i32;
+        let pos_x = in_world_origin_pos.x as i32;
+        let pos_y = in_world_origin_pos.y as i32;
         let mouse_x = in_world_mouse_pos.x as i32;
         let mouse_y = in_world_mouse_pos.y as i32;
 
-        if mouse_x > origin_x && mouse_x < origin_x + size.x as i32 {
-            if mouse_y > origin_y && mouse_y < origin_y + size.y as i32 {
+        if mouse_x > pos_x && mouse_x < pos_x + size.x as i32 {
+            if mouse_y > pos_y && mouse_y < pos_y + size.y as i32 {
                 return true;
             }
         }
@@ -297,15 +291,16 @@ impl Card {
     fn new_options(node_id: String, options: Vec<String>, pos: Vector2) -> Card {
         let mut options_widgets = vec![];
 
-        let mut y_offset = 10.;
+        let mut offset_y = 10.;
         let mut cur_i = 0;
+
         for _ in options {
             options_widgets.push(Widget {
                 node_ref: node_id.clone(),
                 widget_type: WidgetType::TextInput,
                 offset: Vector2 {
                     x: 10.,
-                    y: y_offset,
+                    y: offset_y,
                 },
                 editing_node_member: Some(NodeMember::Options(cur_i)),
             });
@@ -314,11 +309,11 @@ impl Card {
                 widget_type: WidgetType::OutputConnection,
                 offset: Vector2 {
                     x: 170.,
-                    y: y_offset + 10.,
+                    y: offset_y + 10.,
                 },
                 editing_node_member: None,
             });
-            y_offset += 35.;
+            offset_y += 35.;
             cur_i += 1;
         }
 
@@ -327,7 +322,7 @@ impl Card {
             pos: pos,
             size: Vector2 {
                 x: 170.,
-                y: y_offset,
+                y: offset_y,
             },
             widgets: options_widgets,
             card_type: NodeTypes::Options,
@@ -405,16 +400,12 @@ impl Card {
     fn copy_output_widgets(&self) -> Vec<Widget> {
         self.widgets
             .iter()
-            .clone()
             .filter(|x| x.widget_type == WidgetType::OutputConnection)
             .map(|x| x.clone())
             .collect()
     }
 
     fn from_output_widget_i_to_node_front_link_i(&self, wid_i: &usize) -> usize {
-        // wid_i - (self.widgets.len() - self.copy_output_widgets().len())
-        // this only works if the outputs are in the end of the widgets, I'll have to make a more naive function
-
         let mut cur_i = 0;
         let mut cur_found_output = -1;
         for w in &self.widgets {
@@ -432,9 +423,7 @@ impl Card {
         unreachable!()
     }
 
-    fn update(&mut self, rl: &RaylibHandle, cam: &Camera2D) -> Option<CardNotification> {
-        let mouse_world_pos = rl.get_screen_to_world2D(rl.get_mouse_position(), cam);
-
+    fn update(&mut self, rl: &RaylibHandle, mouse_world_pos: Vector2) -> Option<CardNotification> {
         if rl.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
             // Adapted from 2d camera_mouse_zoom found at: https://www.raylib.com/examples.html
             let mouse_x = mouse_world_pos.x as i32;
@@ -476,11 +465,9 @@ impl Card {
                     }
                 }
             }
-        }
 
-        match self.card_type {
-            NodeTypes::Options => {
-                if rl.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
+            match self.card_type {
+                NodeTypes::Options => {
                     let add_button_center = Vector2 {
                         x: self.pos.x + self.size.x / 2.,
                         y: self.pos.y + self.size.y,
@@ -492,8 +479,8 @@ impl Card {
                         ));
                     }
                 }
+                _ => {}
             }
-            _ => {}
         }
 
         None
@@ -504,17 +491,10 @@ impl Card {
         match self.card_type {
             NodeTypes::Dialogue => {
                 self.draw_lable(d, "Character:", Vector2 { x: 10., y: 10. });
-
-                let chr_label = &self.widgets[0];
-                chr_label.draw(d, self.pos, node_data.character, None);
-
+                self.widgets[0].draw(d, self.pos, node_data.character, None);
                 self.draw_lable(d, "Dialogue:", Vector2 { x: 10., y: 80. });
-
-                let dlg_label = &self.widgets[1];
-                dlg_label.draw(d, self.pos, node_data.dialogue, None);
-
-                let output = &self.widgets[2];
-                output.draw(d, self.pos, None, None)
+                self.widgets[1].draw(d, self.pos, node_data.dialogue, None);
+                self.widgets[2].draw(d, self.pos, None, None)
             }
             NodeTypes::Options => {
                 let mut cur_opt_i = 0;
@@ -627,6 +607,12 @@ impl Card {
         );
 
         d.draw_circle(x_pos, y_pos, corner_radius as f32, Color::PINK);
+        d.draw_circle(
+            x_pos + x_size / 2,
+            y_pos + y_size,
+            corner_radius as f32,
+            Color::RED,
+        );
     }
 }
 
@@ -668,27 +654,24 @@ impl CanvasContextMenu {
                     return None;
                 }
 
+                self.state = CanvasContextMenuState::Hidden;
                 match hovering {
                     0 => {
-                        self.state = CanvasContextMenuState::Hidden;
                         return Some(CanvasContextMenuNotification::CreateNewCard(
                             NodeTypes::Dialogue,
                         ));
                     }
                     1 => {
-                        self.state = CanvasContextMenuState::Hidden;
                         return Some(CanvasContextMenuNotification::CreateNewCard(
                             NodeTypes::Options,
                         ));
                     }
                     2 => {
-                        self.state = CanvasContextMenuState::Hidden;
                         return Some(CanvasContextMenuNotification::CreateNewCard(
                             NodeTypes::SetFlag,
                         ));
                     }
                     3 => {
-                        self.state = CanvasContextMenuState::Hidden;
                         return Some(CanvasContextMenuNotification::CreateNewCard(
                             NodeTypes::Conditional,
                         ));
@@ -702,7 +685,7 @@ impl CanvasContextMenu {
         return None;
     }
 
-    fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>, cam: &Camera2D) {
+    fn draw(&self, d: &mut RaylibMode2D<'_, RaylibDrawHandle>, mouse_world_pos: Vector2) {
         match self.state {
             CanvasContextMenuState::Hidden => {}
             CanvasContextMenuState::NewCard => {
@@ -714,10 +697,13 @@ impl CanvasContextMenu {
                     Color::WHITE,
                 );
 
-                let m = d.get_screen_to_world2D(d.get_mouse_position(), cam);
-                let hovering = ((m - self.pos).x / 30.).floor() as i64;
+                let hovering = ((mouse_world_pos - self.pos).x / 30.).floor() as i64;
 
-                if hovering < 4 && hovering >= 0 && m.y > self.pos.y && m.y < self.pos.y + 30. {
+                if hovering < 4
+                    && hovering >= 0
+                    && mouse_world_pos.y > self.pos.y
+                    && mouse_world_pos.y < self.pos.y + 30.
+                {
                     d.draw_rectangle(
                         self.pos.x as i32 + (hovering * 30) as i32,
                         self.pos.y as i32,
@@ -750,8 +736,8 @@ struct CanvasScene {
     // mouse state
     // TODO: Maybe move the mouse state to a separate struct
     mouse_sate: CanvasMouseState,
-    last_time_l_mouse_pressed: f32,
-    last_time_r_mouse_pressed: f32,
+    last_l_mouse_pressed: f32,
+    last_r_mouse_pressed: f32,
 
     context_menu: CanvasContextMenu,
 }
@@ -763,7 +749,7 @@ impl CanvasScene {
 
             for j in &self.node_pool {
                 if j.id == cur_i {
-                    continue 'outer_loop
+                    continue 'outer_loop;
                 }
             }
 
@@ -784,12 +770,10 @@ impl CanvasScene {
     }
 
     fn get_card_i(&self, id: String) -> usize {
-        let mut i = 0;
-        for c in &self.cards {
+        for (i, c) in self.cards.iter().enumerate() {
             if c.node_ref == id {
                 return i;
             }
-            i += 1;
         }
 
         unreachable!()
@@ -800,8 +784,8 @@ impl CanvasScene {
     }
 
     fn update(&mut self, rl: &RaylibHandle, last_mouse_pos: &mut Vector2) {
-        self.last_time_l_mouse_pressed += rl.get_frame_time();
-        self.last_time_r_mouse_pressed += rl.get_frame_time();
+        self.last_l_mouse_pressed += rl.get_frame_time();
+        self.last_r_mouse_pressed += rl.get_frame_time();
 
         match &self.state {
             CanvasSceneStates::Roaming => {
@@ -872,7 +856,7 @@ impl CanvasScene {
         match &self.mouse_sate {
             CanvasMouseState::Roaming => {
                 if rl.is_mouse_button_released(MouseButton::MOUSE_RIGHT_BUTTON) {
-                    if self.last_time_r_mouse_pressed < 0.2 {
+                    if self.last_r_mouse_pressed < 0.2 {
                         self.context_menu.pos = self.get_mouse_world_pos(rl);
                         self.context_menu.state = CanvasContextMenuState::NewCard;
                     }
@@ -880,7 +864,7 @@ impl CanvasScene {
             }
             CanvasMouseState::CreatingConnection(ref_id, i) => {
                 if rl.is_mouse_button_released(MouseButton::MOUSE_LEFT_BUTTON)
-                    && self.last_time_l_mouse_pressed > 0.5
+                    && self.last_l_mouse_pressed > 0.5
                 // this check allows both ways of creating connection
                 {
                     // TODO: Create function that gets the position of the card input
@@ -926,14 +910,15 @@ impl CanvasScene {
         }
 
         if rl.is_mouse_button_pressed(MouseButton::MOUSE_RIGHT_BUTTON) {
-            self.last_time_r_mouse_pressed = 0.;
+            self.last_r_mouse_pressed = 0.;
         }
         if rl.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
-            self.last_time_l_mouse_pressed = 0.;
+            self.last_l_mouse_pressed = 0.;
         }
 
+        let m_pos = self.get_mouse_world_pos(rl);
         for c in self.cards.iter_mut() {
-            let notify = c.update(rl, &self.cam);
+            let notify = c.update(rl, m_pos.clone());
 
             match notify {
                 Some(notification_type) => match notification_type {
@@ -1066,7 +1051,7 @@ impl CanvasScene {
         }
 
         self.draw_card_connections(d);
-        self.context_menu.draw(d, &self.cam);
+        self.context_menu.draw(d, self.get_mouse_world_pos(d));
     }
 
     // Yes, I diceded to go with some imediate ui here
@@ -1112,25 +1097,27 @@ impl CanvasScene {
         let mut cur_text;
 
         match &self.state {
-            CanvasSceneStates::EditingTextInput(wte, member) => match member {
-                NodeMember::Character => {
-                    cur_text = self.copy_node_data(&wte).character.unwrap();
+            CanvasSceneStates::EditingTextInput(wte, member) => {
+                match member {
+                    NodeMember::Character => {
+                        cur_text = self.copy_node_data(&wte).character.unwrap();
+                    }
+                    NodeMember::Dialogue => {
+                        cur_text = self.copy_node_data(&wte).dialogue.unwrap();
+                    }
+                    NodeMember::Options(i) => {
+                        let options_vec = &self.copy_node_data(&wte).options.unwrap();
+                        cur_text = options_vec[*i].clone();
+                    }
+                    NodeMember::FlagToCheck => {
+                        cur_text = self.copy_node_data(&wte).flag_to_check.unwrap();
+                    }
+                    NodeMember::FlagToSet => {
+                        cur_text = self.copy_node_data(&wte).flag_to_set.unwrap();
+                    }
+                    _ => unimplemented!("{:?}", member),
                 }
-                NodeMember::Dialogue => {
-                    cur_text = self.copy_node_data(&wte).dialogue.unwrap();
-                }
-                NodeMember::Options(i) => {
-                    let options_vec = &self.copy_node_data(&wte).options.unwrap();
-                    cur_text = options_vec[*i].clone();
-                }
-                NodeMember::FlagToCheck => {
-                    cur_text = self.copy_node_data(&wte).flag_to_check.unwrap();
-                }
-                NodeMember::FlagToSet => {
-                    cur_text = self.copy_node_data(&wte).flag_to_set.unwrap();
-                }
-                _ => unimplemented!("{:?}", member),
-            },
+            }
             _ => panic!("Something has gone incredibly wrong."),
         }
         for &(c, key) in &keymap {
@@ -1362,8 +1349,8 @@ fn main() {
         ],
         state: CanvasSceneStates::Roaming,
         mouse_sate: CanvasMouseState::Roaming,
-        last_time_l_mouse_pressed: 0.,
-        last_time_r_mouse_pressed: 0.,
+        last_l_mouse_pressed: 0.,
+        last_r_mouse_pressed: 0.,
         context_menu: CanvasContextMenu {
             state: CanvasContextMenuState::Hidden,
             pos: Vector2 { x: 0., y: 0. },
