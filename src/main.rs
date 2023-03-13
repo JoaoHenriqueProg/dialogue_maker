@@ -1097,27 +1097,25 @@ impl CanvasScene {
         let mut cur_text;
 
         match &self.state {
-            CanvasSceneStates::EditingTextInput(wte, member) => {
-                match member {
-                    NodeMember::Character => {
-                        cur_text = self.copy_node_data(&wte).character.unwrap();
-                    }
-                    NodeMember::Dialogue => {
-                        cur_text = self.copy_node_data(&wte).dialogue.unwrap();
-                    }
-                    NodeMember::Options(i) => {
-                        let options_vec = &self.copy_node_data(&wte).options.unwrap();
-                        cur_text = options_vec[*i].clone();
-                    }
-                    NodeMember::FlagToCheck => {
-                        cur_text = self.copy_node_data(&wte).flag_to_check.unwrap();
-                    }
-                    NodeMember::FlagToSet => {
-                        cur_text = self.copy_node_data(&wte).flag_to_set.unwrap();
-                    }
-                    _ => unimplemented!("{:?}", member),
+            CanvasSceneStates::EditingTextInput(wte, member) => match member {
+                NodeMember::Character => {
+                    cur_text = self.copy_node_data(&wte).character.unwrap();
                 }
-            }
+                NodeMember::Dialogue => {
+                    cur_text = self.copy_node_data(&wte).dialogue.unwrap();
+                }
+                NodeMember::Options(i) => {
+                    let options_vec = &self.copy_node_data(&wte).options.unwrap();
+                    cur_text = options_vec[*i].clone();
+                }
+                NodeMember::FlagToCheck => {
+                    cur_text = self.copy_node_data(&wte).flag_to_check.unwrap();
+                }
+                NodeMember::FlagToSet => {
+                    cur_text = self.copy_node_data(&wte).flag_to_set.unwrap();
+                }
+                _ => unimplemented!("{:?}", member),
+            },
             _ => panic!("Something has gone incredibly wrong."),
         }
         for &(c, key) in &keymap {
@@ -1293,13 +1291,14 @@ fn main() {
 
     // TODO: new() function for context menu
     let mut cm_images = HashMap::new();
+
+    let new_card_code = include_bytes!("../assets/context_menu_new_card.png").to_vec();
+    let new_card_image =
+        Image::load_image_from_mem(".png", &new_card_code, new_card_code.len() as i32).unwrap();
     cm_images.insert(
         "new_card".to_string(),
-        rl.load_texture_from_image(
-            &thread,
-            &Image::load_image("./assets/context_menu_new_card.png").unwrap(),
-        )
-        .unwrap(),
+        rl.load_texture_from_image(&thread, &new_card_image)
+            .unwrap(),
     );
     let mut canvas_scene = CanvasScene {
         cam: Camera2D {
