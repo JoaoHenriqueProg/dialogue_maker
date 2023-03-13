@@ -11,7 +11,7 @@ enum CanvasMouseState {
     MovingCard(String),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 enum NodeTypes {
     Dialogue,
     Options,
@@ -219,6 +219,11 @@ impl Widget {
     }
 
     fn was_clicked(&self, in_world_origin_pos: Vector2, in_world_mouse_pos: Vector2) -> bool {
+        let offset = match self.widget_type {
+            WidgetType::OutputConnection => Vector2 { x: 10., y: 10. },
+            _ => Vector2{x:0. ,y: 0.}
+        };
+
         let size = match self.widget_type {
             WidgetType::TextInput => Vector2 { x: 150., y: 25. },
             WidgetType::OutputConnection => Vector2 { x: 20., y: 20. },
@@ -228,8 +233,8 @@ impl Widget {
 
         let pos_x = in_world_origin_pos.x as i32;
         let pos_y = in_world_origin_pos.y as i32;
-        let mouse_x = in_world_mouse_pos.x as i32;
-        let mouse_y = in_world_mouse_pos.y as i32;
+        let mouse_x = (in_world_mouse_pos.x + offset.x) as i32;
+        let mouse_y = (in_world_mouse_pos.y + offset.y) as i32;
 
         if mouse_x > pos_x && mouse_x < pos_x + size.x as i32 {
             if mouse_y > pos_y && mouse_y < pos_y + size.y as i32 {
@@ -607,12 +612,15 @@ impl Card {
         );
 
         d.draw_circle(x_pos, y_pos, corner_radius as f32, Color::PINK);
-        d.draw_circle(
-            x_pos + x_size / 2,
-            y_pos + y_size,
-            corner_radius as f32,
-            Color::RED,
-        );
+
+        if self.card_type == NodeTypes::Options {
+            d.draw_circle(
+                x_pos + x_size / 2,
+                y_pos + y_size,
+                corner_radius as f32,
+                Color::RED,
+            );
+        }
     }
 }
 
