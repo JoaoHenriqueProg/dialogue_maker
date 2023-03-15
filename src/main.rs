@@ -717,6 +717,30 @@ impl Card {
                 corner_radius as f32,
                 Color::RED,
             );
+            d.draw_line_ex(
+                Vector2 {
+                    x: (x_pos + x_size / 2 - 8) as f32,
+                    y: (y_pos + y_size) as f32,
+                },
+                Vector2 {
+                    x: (x_pos + x_size / 2 + 8) as f32,
+                    y: (y_pos + y_size) as f32,
+                },
+                2.,
+                Color::WHITE,
+            );
+            d.draw_line_ex(
+                Vector2 {
+                    x: (x_pos + x_size / 2) as f32,
+                    y: (y_pos + y_size - 8) as f32,
+                },
+                Vector2 {
+                    x: (x_pos + x_size / 2) as f32,
+                    y: (y_pos + y_size + 8) as f32,
+                },
+                2.,
+                Color::WHITE,
+            );
         }
     }
 }
