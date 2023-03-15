@@ -17,6 +17,7 @@ enum NodeTypes {
     Options,
     SetFlag,
     Conditional, // Noticed I didn't think enough about this one, decide to make it so that flags are only flags
+    EmitEvent,
     SomethingHasGoneReallyWrong,
 }
 
@@ -34,6 +35,9 @@ enum NodeMember {
     FlagToCheck,
     FlagToSet,
     ValueToSet,
+    EventToEmit,
+    EventDataKey(usize),
+    EventDataVal(usize),
 }
 
 #[derive(Default, Clone)]
@@ -46,22 +50,18 @@ struct Node {
     flag_to_set: Option<String>,
     value_to_set: Option<bool>,
     front_links: Vec<String>, // Vector of other Nodes' ids
+    event_to_emit: Option<String>,
+    event_data: Option<Vec<(String, String)>>, // TODO?: Maybe integrate the JsonType from my json parser
     node_type: NodeTypes,
 }
 
 impl Node {
     fn default_dialogue() -> Node {
-        Node {
-            id: String::default(),
-            character: Some("".to_string()),
-            dialogue: Some("".to_string()),
-            options: None,
-            flag_to_check: None,
-            flag_to_set: None,
-            value_to_set: None,
-            front_links: Vec::default(),
-            node_type: NodeTypes::Dialogue,
-        }
+        let mut to_return = Node::default();
+        to_return.character = Some("".to_string());
+        to_return.dialogue = Some("".to_string());
+        to_return.front_links = vec![];
+        to_return
     }
     fn new_dialogue<T: ToString>(
         id: T,
@@ -74,44 +74,28 @@ impl Node {
         to_return.character = Some(character.to_string());
         to_return.dialogue = Some(dialogue.to_string());
         to_return.front_links = front_links;
-
         to_return
     }
 
     fn default_options() -> Node {
-        Node {
-            id: String::default(),
-            character: None,
-            dialogue: None,
-            options: Some(vec![]),
-            flag_to_check: None,
-            flag_to_set: None,
-            value_to_set: None,
-            front_links: Vec::default(),
-            node_type: NodeTypes::Options,
-        }
+        let mut to_return = Node::default();
+        to_return.options = Some(vec![]);
+        to_return.front_links = vec![];
+        to_return
     }
     fn new_options<T: ToString>(id: T, options: Vec<String>, front_links: Vec<String>) -> Node {
         let mut to_return = Node::default_options();
         to_return.id = id.to_string();
         to_return.options = Some(options);
         to_return.front_links = front_links;
-
         to_return
     }
 
     fn default_conditional() -> Node {
-        Node {
-            id: String::default(),
-            character: None,
-            dialogue: None,
-            options: None,
-            flag_to_check: Some("".to_string()),
-            flag_to_set: None,
-            value_to_set: None,
-            front_links: Vec::default(),
-            node_type: NodeTypes::Conditional,
-        }
+        let mut to_return = Node::default();
+        to_return.flag_to_check = Some("".to_string());
+        to_return.front_links = vec!["".to_string(), "".to_string(), "".to_string()];
+        to_return
     }
     fn new_conditional<T: ToString>(id: T, flag_to_check: T, front_links: Vec<String>) -> Node {
         let mut to_return = Node::default_conditional();
@@ -129,17 +113,11 @@ impl Node {
     }
 
     fn default_set_flag() -> Node {
-        Node {
-            id: String::default(),
-            character: None,
-            dialogue: None,
-            options: None,
-            flag_to_check: None,
-            flag_to_set: Some("".to_string()),
-            value_to_set: Some(false),
-            front_links: Vec::default(),
-            node_type: NodeTypes::SetFlag,
-        }
+        let mut to_return = Node::default();
+        to_return.flag_to_set = Some("".to_string());
+        to_return.value_to_set = Some(false);
+        to_return.front_links = vec![];
+        to_return
     }
     fn new_set_flag<T: ToString>(
         id: T,
@@ -152,7 +130,25 @@ impl Node {
         to_return.flag_to_set = Some(flag_to_set.to_string());
         to_return.value_to_set = Some(value_to_set);
         to_return.front_links = front_links;
+        to_return
+    }
 
+    fn default_emit_event() -> Node {
+        let mut to_return = Node::default();
+        to_return.event_to_emit = Some("".to_string());
+        to_return.node_type = NodeTypes::EmitEvent;
+        to_return
+    }
+    fn new_emit_event<T: ToString>(
+        id: T,
+        event_to_emit: T,
+        event_data: Vec<(String, String)>,
+    ) -> Node {
+        let mut to_return = Node::default_emit_event();
+        to_return.id = id.to_string();
+        to_return.event_to_emit = Some(event_to_emit.to_string());
+        to_return.event_data = Some(event_data);
+        to_return.front_links = vec!["".to_string()];
         to_return
     }
 }
@@ -221,7 +217,7 @@ impl Widget {
     fn was_clicked(&self, in_world_origin_pos: Vector2, in_world_mouse_pos: Vector2) -> bool {
         let offset = match self.widget_type {
             WidgetType::OutputConnection => Vector2 { x: 10., y: 10. },
-            _ => Vector2{x:0. ,y: 0.}
+            _ => Vector2 { x: 0., y: 0. },
         };
 
         let size = match self.widget_type {
@@ -258,6 +254,7 @@ struct Card {
 enum CardNotification {
     EditTextInput { id: String, node_member: NodeMember },
     AddOptionToOptionsNode(String),
+    AddArgToEmitEventNode(String),
     ToggleCheckBox { id: String, node_member: NodeMember },
     CreatingCardConnection(String, usize), // id, output index
     MovingCard(String),
@@ -402,6 +399,63 @@ impl Card {
         }
     }
 
+    fn new_emit_event(node_id: String, data: Vec<(String, String)>, pos: Vector2) -> Card {
+        let mut wids = vec![];
+
+        wids.push(Widget {
+            node_ref: node_id.clone(),
+            widget_type: WidgetType::TextInput,
+            editing_node_member: Some(NodeMember::EventToEmit),
+            offset: Vector2 { x: 10., y: 10. },
+        });
+
+        let mut y_offset = 35.;
+        for (arg_i, (key, val)) in data.iter().enumerate() {
+            y_offset += 10.;
+            wids.push(Widget {
+                node_ref: node_id.clone(),
+                widget_type: WidgetType::TextInput,
+                editing_node_member: Some(NodeMember::EventDataKey(arg_i.clone())),
+                offset: Vector2 {
+                    x: 10.,
+                    y: y_offset,
+                },
+            });
+            y_offset += 25.;
+            wids.push(Widget {
+                node_ref: node_id.clone(),
+                widget_type: WidgetType::TextInput,
+                editing_node_member: Some(NodeMember::EventDataVal(arg_i.clone())),
+                offset: Vector2 {
+                    x: 10.,
+                    y: y_offset,
+                },
+            });
+            y_offset += 25.;
+        }
+
+        wids.push(Widget {
+            node_ref: node_id.clone(),
+            widget_type: WidgetType::OutputConnection,
+            editing_node_member: None,
+            offset: Vector2 {
+                x: 170.,
+                y: y_offset,
+            },
+        });
+
+        Card {
+            node_ref: node_id.clone(),
+            pos: pos,
+            size: Vector2 {
+                x: 170.,
+                y: y_offset + 10.,
+            },
+            widgets: wids,
+            card_type: NodeTypes::EmitEvent,
+        }
+    }
+
     fn copy_output_widgets(&self) -> Vec<Widget> {
         self.widgets
             .iter()
@@ -484,6 +538,18 @@ impl Card {
                         ));
                     }
                 }
+                NodeTypes::EmitEvent => {
+                    let add_button_center = Vector2 {
+                        x: self.pos.x + self.size.x / 2.,
+                        y: self.pos.y + self.size.y,
+                    };
+
+                    if mouse_world_pos.distance_to(add_button_center) < 10. {
+                        return Some(CardNotification::AddArgToEmitEventNode(
+                            self.node_ref.clone(),
+                        ));
+                    }
+                }
                 _ => {}
             }
         }
@@ -542,6 +608,37 @@ impl Card {
                         Some(node_data.value_to_set.clone().unwrap()),
                     );
                 }
+            }
+            NodeTypes::EmitEvent => {
+                self.widgets[0].draw(d, self.pos, Some(node_data.event_to_emit.unwrap()), None);
+
+                for (j, wid_i) in self
+                    .widgets
+                    .iter()
+                    .filter(|x| match x.editing_node_member.clone() {
+                        None => false,
+                        Some(found) => match found {
+                            NodeMember::EventDataKey(_) => true,
+                            NodeMember::EventDataVal(_) => true,
+                            _ => false,
+                        },
+                    })
+                    .collect::<Vec<&Widget>>()
+                    .iter()
+                    .enumerate()
+                {
+                    let is_key = j % 2 == 0;
+
+                    let arg = node_data.event_data.clone().unwrap()[j / 2].clone();
+
+                    if is_key {
+                        wid_i.draw(d, self.pos, Some(arg.0), None);
+                    } else {
+                        wid_i.draw(d, self.pos, Some(arg.1), None);
+                    }
+                }
+
+                self.widgets[self.widgets.len() - 1].draw(d, self.pos, None, None)
             }
             _ => unimplemented!("{:?}", self.card_type),
         }
@@ -613,7 +710,7 @@ impl Card {
 
         d.draw_circle(x_pos, y_pos, corner_radius as f32, Color::PINK);
 
-        if self.card_type == NodeTypes::Options {
+        if self.card_type == NodeTypes::Options || self.card_type == NodeTypes::EmitEvent {
             d.draw_circle(
                 x_pos + x_size / 2,
                 y_pos + y_size,
@@ -938,6 +1035,10 @@ impl CanvasScene {
                         post_handle_notification =
                             Some(CardNotification::AddOptionToOptionsNode(id));
                     }
+                    CardNotification::AddArgToEmitEventNode(id) => {
+                        post_handle_notification =
+                            Some(CardNotification::AddArgToEmitEventNode(id));
+                    }
                     CardNotification::ToggleCheckBox { id, node_member } => {
                         post_handle_notification =
                             Some(CardNotification::ToggleCheckBox { id, node_member });
@@ -1002,6 +1103,23 @@ impl CanvasScene {
                         }
                         _ => unimplemented!("{:?}", node_member),
                     }
+                }
+                CardNotification::AddArgToEmitEventNode(id) => {
+                    let pos = self.copy_card_data(&id).pos;
+
+                    let mut cur_node = self.get_node_ref(&id);
+                    let mut next_node_arg_vec = cur_node.event_data.clone().unwrap();
+                    next_node_arg_vec.push(("".to_string(), "".to_string()));
+                    cur_node.event_data = Some(next_node_arg_vec);
+
+                    let new_card = Card::new_emit_event(
+                        cur_node.id.clone(),
+                        cur_node.clone().event_data.unwrap(),
+                        pos,
+                    );
+
+                    let i = self.get_card_i(id);
+                    self.cards[i] = new_card;
                 }
                 _ => unimplemented!("{:?}", notification),
             },
@@ -1106,21 +1224,26 @@ impl CanvasScene {
 
         match &self.state {
             CanvasSceneStates::EditingTextInput(wte, member) => match member {
-                NodeMember::Character => {
-                    cur_text = self.copy_node_data(&wte).character.unwrap();
-                }
-                NodeMember::Dialogue => {
-                    cur_text = self.copy_node_data(&wte).dialogue.unwrap();
-                }
+                NodeMember::Character => cur_text = self.copy_node_data(&wte).character.unwrap(),
+                NodeMember::Dialogue => cur_text = self.copy_node_data(&wte).dialogue.unwrap(),
                 NodeMember::Options(i) => {
                     let options_vec = &self.copy_node_data(&wte).options.unwrap();
                     cur_text = options_vec[*i].clone();
                 }
                 NodeMember::FlagToCheck => {
-                    cur_text = self.copy_node_data(&wte).flag_to_check.unwrap();
+                    cur_text = self.copy_node_data(&wte).flag_to_check.unwrap()
                 }
-                NodeMember::FlagToSet => {
-                    cur_text = self.copy_node_data(&wte).flag_to_set.unwrap();
+                NodeMember::FlagToSet => cur_text = self.copy_node_data(&wte).flag_to_set.unwrap(),
+                NodeMember::EventToEmit => {
+                    cur_text = self.copy_node_data(&wte).event_to_emit.unwrap()
+                }
+                NodeMember::EventDataKey(i) => {
+                    let args_vec = &self.copy_node_data(&wte).event_data.unwrap();
+                    cur_text = args_vec[*i].clone().0;
+                }
+                NodeMember::EventDataVal(i) => {
+                    let args_vec = &self.copy_node_data(&wte).event_data.unwrap();
+                    cur_text = args_vec[*i].clone().1;
                 }
                 _ => unimplemented!("{:?}", member),
             },
@@ -1136,22 +1259,25 @@ impl CanvasScene {
                 for i in &mut self.node_pool {
                     if i.id == id.as_str() {
                         match member {
-                            NodeMember::Dialogue => {
-                                i.dialogue = Some(cur_text.clone());
-                            }
-                            NodeMember::Character => {
-                                i.character = Some(cur_text.clone());
-                            }
+                            NodeMember::Dialogue => i.dialogue = Some(cur_text.clone()),
+                            NodeMember::Character => i.character = Some(cur_text.clone()),
                             NodeMember::Options(opt_i) => {
                                 let mut cur_vec = i.options.clone().unwrap();
                                 cur_vec[*opt_i] = cur_text.clone();
                                 i.options = Some(cur_vec);
                             }
-                            NodeMember::FlagToCheck => {
-                                i.flag_to_check = Some(cur_text.clone());
+                            NodeMember::FlagToCheck => i.flag_to_check = Some(cur_text.clone()),
+                            NodeMember::FlagToSet => i.flag_to_set = Some(cur_text.clone()),
+                            NodeMember::EventToEmit => i.event_to_emit = Some(cur_text.clone()),
+                            NodeMember::EventDataKey(arg_i) => {
+                                let mut cur_vec = i.event_data.clone().unwrap();
+                                cur_vec[*arg_i].0 = cur_text.clone();
+                                i.event_data = Some(cur_vec);
                             }
-                            NodeMember::FlagToSet => {
-                                i.flag_to_set = Some(cur_text.clone());
+                            NodeMember::EventDataVal(arg_i) => {
+                                let mut cur_vec = i.event_data.clone().unwrap();
+                                cur_vec[*arg_i].1 = cur_text.clone();
+                                i.event_data = Some(cur_vec);
                             }
                             _ => unimplemented!("{:?}", member),
                         }
@@ -1224,6 +1350,15 @@ impl CanvasScene {
                 NodeTypes::SetFlag => {
                     let card_pos = Vector2 { x: x_offset, y: 0. };
                     self.cards.push(Card::new_set_flag(i.id.clone(), card_pos));
+                    x_offset += 200.;
+                }
+                NodeTypes::EmitEvent => {
+                    let card_pos = Vector2 { x: x_offset, y: 0. };
+                    self.cards.push(Card::new_emit_event(
+                        i.id.clone(),
+                        i.event_data.clone().unwrap(),
+                        card_pos,
+                    ));
                     x_offset += 200.;
                 }
                 _ => unimplemented!("{:?}", i.node_type),
@@ -1353,6 +1488,19 @@ fn main() {
             //     vec!["001".to_string(), "".to_string(), "003".to_string()],
             // ),
             // Node::new_set_flag("005", "FLAG1", true, vec!["".to_string()]),
+            Node::new_emit_event(
+                "00001",
+                "FLIP_H_SPRITE",
+                vec![("CHAR_TO_FLIP".to_string(), "CHAR_NAME".to_string())],
+            ),
+            Node::new_emit_event(
+                "00002",
+                "ERR_EXIT",
+                vec![
+                    ("CODE".to_string(), "001".to_string()),
+                    ("MESSAGE".to_string(), "ERR MESSAGE HERE".to_string()),
+                ],
+            ),
         ],
         state: CanvasSceneStates::Roaming,
         mouse_sate: CanvasMouseState::Roaming,
