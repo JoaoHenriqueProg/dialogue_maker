@@ -774,7 +774,7 @@ impl CanvasContextMenu {
             CanvasContextMenuState::Hidden => {}
             CanvasContextMenuState::NewCard => {
                 let hovering = ((m_w_pos - self.pos).x / 30.).floor() as i64;
-                if hovering > 3
+                if hovering > 4
                     || hovering < 0
                     || m_w_pos.y < self.pos.y
                     || m_w_pos.y > self.pos.y + 30.
@@ -805,6 +805,11 @@ impl CanvasContextMenu {
                             NodeTypes::Conditional,
                         ));
                     }
+                    4 => {
+                        return Some(CanvasContextMenuNotification::CreateNewCard(
+                            NodeTypes::EmitEvent,
+                        ))
+                    }
                     _ => {
                         panic!()
                     }
@@ -818,7 +823,7 @@ impl CanvasContextMenu {
         match self.state {
             CanvasContextMenuState::Hidden => {}
             CanvasContextMenuState::NewCard => {
-                d.draw_rectangle(self.pos.x as i32, self.pos.y as i32, 120, 30, Color::PINK);
+                d.draw_rectangle(self.pos.x as i32, self.pos.y as i32, 150, 30, Color::PINK);
                 d.draw_texture(
                     self.images.get("new_card").unwrap(),
                     self.pos.x as i32,
@@ -828,7 +833,7 @@ impl CanvasContextMenu {
 
                 let hovering = ((mouse_world_pos - self.pos).x / 30.).floor() as i64;
 
-                if hovering < 4
+                if hovering < 5
                     && hovering >= 0
                     && mouse_world_pos.y > self.pos.y
                     && mouse_world_pos.y < self.pos.y + 30.
@@ -970,6 +975,15 @@ impl CanvasScene {
 
                             let new_card =
                                 Card::new_conditional(new_id, self.get_mouse_world_pos(rl));
+                            self.cards.push(new_card);
+                        }
+                        NodeTypes::EmitEvent => {
+                            let new_node =
+                                Node::new_emit_event(new_id.clone(), "".to_string(), vec![]);
+                            self.node_pool.push(new_node);
+
+                            let new_card =
+                                Card::new_emit_event(new_id, vec![], self.get_mouse_world_pos(rl));
                             self.cards.push(new_card);
                         }
 
