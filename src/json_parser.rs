@@ -6,9 +6,9 @@ pub struct Parser {
     cur_i: usize,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct JsonObject {
-    children: Vec<(String, JsonType)>,
+    pub children: Vec<(String, JsonType)>,
 }
 
 impl JsonObject {
@@ -298,7 +298,7 @@ impl JsonObject {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum JsonType {
     Bool(bool),
     Number(f64),

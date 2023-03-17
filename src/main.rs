@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use json_parser::{Parser, JsonObject};
+use json_parser::{JsonObject, JsonType, Parser};
 use raylib::prelude::*;
 
 mod json_parser;
@@ -956,17 +956,144 @@ impl CanvasScene {
                     for o in n.event_data.clone().unwrap() {
                         exits.set_string(&o.0, &o.1);
                     }
+                    sub_obj.set_string("next", &n.front_links[0]);
                 }
-                _ => unimplemented!("{:?}", n.node_type)
+                _ => unimplemented!("{:?}", n.node_type),
             }
-            obj.print();
+            // obj.print();
         }
-        
+
         let file_content = obj.stringify();
         match std::fs::write(path, file_content) {
             Ok(()) => println!("SAVE_FILE_INFO: File written successfully"),
             Err(e) => println!("SAVE_FILE_ERR: {:?}", e),
         }
+
+        true
+    }
+
+    fn load_from_file(&mut self) -> bool {
+        let res = nfd::open_file_dialog(Some("json"), None);
+        let mut path = "".to_string();
+        match res {
+            Ok(nfd::Response::Okay(file_path)) => {
+                println!("LOAD_FILE_INFO: File selected: {}", file_path);
+                path = file_path;
+            }
+            Ok(nfd::Response::Cancel) => {
+                println!("LOAD_FILE_INFO: User cancelled the dialog");
+                return false;
+            }
+            Ok(nfd::Response::OkayMultiple(_)) => {
+                println!("LOAD_FILE_INFO: Tried to open multiple files when it shouldn't?");
+                return false;
+            }
+            Err(error) => {
+                println!("LOAD_FILE_ERR: {}", error);
+                return false;
+            }
+        }
+
+        let file_res = std::fs::read(path);
+        let file_content;
+        match file_res {
+            Ok(res) => {
+                file_content = String::from_utf8(res).unwrap();
+            }
+            Err(err) => {
+                println!("LOAD_FILE_ERR: {}", err);
+                return false;
+            }
+        }
+
+        let mut parser = Parser::new();
+        parser.load(file_content);
+        let parsed_obj = parser.parse();
+
+        self.node_pool.clear();
+        self.cards.clear();
+
+        for (n_id, n_obj) in parsed_obj.children {
+            match n_obj {
+                JsonType::Object(obj) => match obj.get_string("type") {
+                    Ok(n_type) => match n_type.as_str() {
+                        "dialogue" => self.node_pool.push(Node::new_dialogue(
+                            n_id,
+                            obj.get_string("character").unwrap(),
+                            obj.get_string("dialogue").unwrap(),
+                            vec![obj.get_string("next").unwrap()],
+                        )),
+                        "options" => {
+                            let mut options_vec: Vec<String> = vec![];
+                            let mut front_vec: Vec<String> = vec![];
+
+                            for exit in obj.get_obj("options").unwrap().children {
+                                options_vec.push(exit.0);
+
+                                match exit.1 {
+                                    JsonType::String(next_node) => front_vec.push(next_node),
+                                    _ => {
+                                        println!("LOAD_FILE_ERR: Options' exits must be Strings.");
+                                        return false;
+                                    }
+                                }
+                            }
+
+                            self.node_pool
+                                .push(Node::new_options(n_id, options_vec, front_vec))
+                        }
+                        "conditional" => {
+                            let exits = obj.get_obj("if").unwrap();
+                            self.node_pool.push(Node::new_conditional(
+                                n_id,
+                                obj.get_string("flag_to_check").unwrap(),
+                                vec![
+                                    exits.get_string("true").unwrap(),
+                                    exits.get_string("false").unwrap(),
+                                    exits.get_string("not_set").unwrap(),
+                                ],
+                            ))
+                        }
+                        "set_flag" => self.node_pool.push(Node::new_set_flag(
+                            n_id,
+                            obj.get_string("flag_to_set").unwrap(),
+                            obj.get_bool("value").unwrap(),
+                            vec![obj.get_string("next").unwrap()],
+                        )),
+                        "emit_event" => {
+                            let mut arg_vec = vec![];
+
+                            for arg in obj.get_obj("args").unwrap().children {
+                                let val = match arg.1 {
+                                    JsonType::String(found_val) => found_val,
+                                    _ => {
+                                        println!("LOAD_FILE_ERR: Options' exits must be Strings.");
+                                        return false;
+                                    }
+                                };
+
+                                arg_vec.push((arg.0, val));
+                            }
+
+                            self.node_pool.push(Node::new_emit_event(
+                                n_id,
+                                obj.get_string("event").unwrap(),
+                                arg_vec,
+                                vec![obj.get_string("next").unwrap()],
+                            ))
+                        }
+                        _ => unimplemented!("{}", n_type),
+                    },
+                    Err(err) => {
+                        println!("LOAD_FILE_ERR: {:?}", err);
+                        return false;
+                    }
+                },
+                _ => return false,
+            }
+        }
+
+        self.parse_node_pool();
 
         true
     }
@@ -1027,6 +1154,9 @@ impl CanvasScene {
     pub fn update_roaming(&mut self, rl: &RaylibHandle, last_mouse_pos: &mut Vector2) {
         if rl.is_key_pressed(KeyboardKey::KEY_S) {
             let test = self.save_to_file();
+        }
+        if rl.is_key_pressed(KeyboardKey::KEY_L) {
+            let test = self.load_from_file();
         }
 
         let context_menu_notification = self.context_menu.update(rl, self.get_mouse_world_pos(rl));
@@ -1595,58 +1725,58 @@ fn main() {
         },
         cards: Vec::default(),
         node_pool: vec![
-            Node::new_dialogue(
-                "00001",
-                "John doe",
-                "Test test testing",
-                vec!["00002".to_string()],
-            ),
-            Node::new_dialogue(
-                "00002",
-                "Second one coming",
-                "I really hope this doesn't break everything.",
-                vec!["00003".to_string()],
-            ),
-            Node::new_options(
-                "00003",
-                vec![
-                    "Hi".to_string(),
-                    "Bye".to_string(),
-                    "Let's go".to_string(),
-                    "To the conditionals!".to_string(),
-                ],
-                vec![
-                    "00001".to_string(),
-                    "00002".to_string(),
-                    "00003".to_string(),
-                    "00004".to_string(),
-                ],
-            ),
-            Node::new_conditional(
-                "00004",
-                "FLAG1",
-                vec![
-                    "00001".to_string(),
-                    "00005".to_string(),
-                    "00003".to_string(),
-                ],
-            ),
-            Node::new_set_flag("00005", "FLAG1", true, vec!["00006".to_string()]),
-            Node::new_emit_event(
-                "00006",
-                "FLIP_H_SPRITE",
-                vec![("CHAR_TO_FLIP".to_string(), "CHAR_NAME".to_string())],
-                vec!["00007".to_string()],
-            ),
-            Node::new_emit_event(
-                "00007",
-                "ERR_EXIT",
-                vec![
-                    ("CODE".to_string(), "001".to_string()),
-                    ("MESSAGE".to_string(), "ERR MESSAGE HERE".to_string()),
-                ],
-                vec!["00001".to_string()],
-            ),
+            // Node::new_dialogue(
+            //     "00001",
+            //     "John doe",
+            //     "Test test testing",
+            //     vec!["00002".to_string()],
+            // ),
+            // Node::new_dialogue(
+            //     "00002",
+            //     "Second one coming",
+            //     "I really hope this doesn't break everything.",
+            //     vec!["00003".to_string()],
+            // ),
+            // Node::new_options(
+            //     "00003",
+            //     vec![
+            //         "Hi".to_string(),
+            //         "Bye".to_string(),
+            //         "Let's go".to_string(),
+            //         "To the conditionals!".to_string(),
+            //     ],
+            //     vec![
+            //         "00001".to_string(),
+            //         "00002".to_string(),
+            //         "00003".to_string(),
+            //         "00004".to_string(),
+            //     ],
+            // ),
+            // Node::new_conditional(
+            //     "00004",
+            //     "FLAG1",
+            //     vec![
+            //         "00001".to_string(),
+            //         "00005".to_string(),
+            //         "00003".to_string(),
+            //     ],
+            // ),
+            // Node::new_set_flag("00005", "FLAG1", true, vec!["00006".to_string()]),
+            // Node::new_emit_event(
+            //     "00006",
+            //     "FLIP_H_SPRITE",
+            //     vec![("CHAR_TO_FLIP".to_string(), "CHAR_NAME".to_string())],
+            //     vec!["00007".to_string()],
+            // ),
+            // Node::new_emit_event(
+            //     "00007",
+            //     "ERR_EXIT",
+            //     vec![
+            //         ("CODE".to_string(), "001".to_string()),
+            //         ("MESSAGE".to_string(), "ERR MESSAGE HERE".to_string()),
+            //     ],
+            //     vec!["00001".to_string()],
+            // ),
         ],
         state: CanvasSceneStates::Roaming,
         mouse_sate: CanvasMouseState::Roaming,
