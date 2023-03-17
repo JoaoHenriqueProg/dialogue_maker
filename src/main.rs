@@ -1526,19 +1526,19 @@ fn main() {
             //     vec!["001".to_string(), "".to_string(), "003".to_string()],
             // ),
             // Node::new_set_flag("005", "FLAG1", true, vec!["".to_string()]),
-            Node::new_emit_event(
-                "00001",
-                "FLIP_H_SPRITE",
-                vec![("CHAR_TO_FLIP".to_string(), "CHAR_NAME".to_string())],
-            ),
-            Node::new_emit_event(
-                "00002",
-                "ERR_EXIT",
-                vec![
-                    ("CODE".to_string(), "001".to_string()),
-                    ("MESSAGE".to_string(), "ERR MESSAGE HERE".to_string()),
-                ],
-            ),
+            // Node::new_emit_event(
+            //     "00001",
+            //     "FLIP_H_SPRITE",
+            //     vec![("CHAR_TO_FLIP".to_string(), "CHAR_NAME".to_string())],
+            // ),
+            // Node::new_emit_event(
+            //     "00002",
+            //     "ERR_EXIT",
+            //     vec![
+            //         ("CODE".to_string(), "001".to_string()),
+            //         ("MESSAGE".to_string(), "ERR MESSAGE HERE".to_string()),
+            //     ],
+            // ),
         ],
         state: CanvasSceneStates::Roaming,
         mouse_sate: CanvasMouseState::Roaming,
