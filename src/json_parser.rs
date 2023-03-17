@@ -12,7 +12,7 @@ pub struct JsonObject {
 }
 
 impl JsonObject {
-    fn new() -> JsonObject {
+    pub fn new() -> JsonObject {
         JsonObject {
             children: Vec::new(),
         }
@@ -219,6 +219,22 @@ impl JsonObject {
         }
     }
 
+    pub fn get_obj_ref<'a, T: ToString>(&'a mut self, key: T) -> Result<&'a mut JsonObject, JsonError> {
+        let i = self.get_index_of_key(key.to_string());
+
+        if i == -1 {
+            return Err(JsonError::KeyNotFound);
+        }
+        match &mut self.children[i as usize].1 {
+            JsonType::Object(val) => {
+                Ok(val)
+            }
+            _ => {
+                return Err(JsonError::WrongTypeValueRequest);
+            }
+        }
+    }
+
     pub fn set_bool<T: ToString>(&mut self, new_key: T, new_value: bool) {
         let to_add = (new_key.to_string(), JsonType::Bool(new_value));
         let i = self.get_index_of_key(new_key);
@@ -261,6 +277,17 @@ impl JsonObject {
     }
     pub fn set_null<T: ToString>(&mut self, new_key: T) {
         let to_add = (new_key.to_string(), JsonType::Null);
+        let i = self.get_index_of_key(new_key);
+
+        if i == -1 {
+            self.children.push(to_add);
+        } else {
+            self.children[i as usize] = to_add;
+        }
+    }
+
+    pub fn push_obj<T: ToString>(&mut self, new_key: T) {
+        let to_add = (new_key.to_string(), JsonType::Object(JsonObject::new()));
         let i = self.get_index_of_key(new_key);
 
         if i == -1 {

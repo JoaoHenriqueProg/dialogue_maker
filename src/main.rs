@@ -2,7 +2,10 @@
 
 use std::collections::HashMap;
 
+use json_parser::{Parser, JsonObject};
 use raylib::prelude::*;
+
+mod json_parser;
 
 #[derive(Debug)]
 enum CanvasMouseState {
@@ -61,6 +64,7 @@ impl Node {
         to_return.character = Some("".to_string());
         to_return.dialogue = Some("".to_string());
         to_return.front_links = vec![];
+        to_return.node_type = NodeTypes::Dialogue;
         to_return
     }
     fn new_dialogue<T: ToString>(
@@ -81,6 +85,7 @@ impl Node {
         let mut to_return = Node::default();
         to_return.options = Some(vec![]);
         to_return.front_links = vec![];
+        to_return.node_type = NodeTypes::Options;
         to_return
     }
     fn new_options<T: ToString>(id: T, options: Vec<String>, front_links: Vec<String>) -> Node {
@@ -95,6 +100,7 @@ impl Node {
         let mut to_return = Node::default();
         to_return.flag_to_check = Some("".to_string());
         to_return.front_links = vec!["".to_string(), "".to_string(), "".to_string()];
+        to_return.node_type = NodeTypes::Conditional;
         to_return
     }
     fn new_conditional<T: ToString>(id: T, flag_to_check: T, front_links: Vec<String>) -> Node {
@@ -117,6 +123,7 @@ impl Node {
         to_return.flag_to_set = Some("".to_string());
         to_return.value_to_set = Some(false);
         to_return.front_links = vec![];
+        to_return.node_type = NodeTypes::SetFlag;
         to_return
     }
     fn new_set_flag<T: ToString>(
@@ -143,12 +150,13 @@ impl Node {
         id: T,
         event_to_emit: T,
         event_data: Vec<(String, String)>,
+        front_links: Vec<String>,
     ) -> Node {
         let mut to_return = Node::default_emit_event();
         to_return.id = id.to_string();
         to_return.event_to_emit = Some(event_to_emit.to_string());
         to_return.event_data = Some(event_data);
-        to_return.front_links = vec!["".to_string()];
+        to_return.front_links = front_links;
         to_return
     }
 }
@@ -877,6 +885,92 @@ struct CanvasScene {
 }
 
 impl CanvasScene {
+    fn save_to_file(&self) -> bool {
+        let mut dialogue = nfd::dialog_save();
+        let dialogue = dialogue.filter("json");
+        let res = dialogue.open();
+        let mut path = "".to_string();
+        match res {
+            Ok(nfd::Response::Okay(file_path)) => {
+                println!("SAVE_FILE_INFO: File selected: {}", file_path);
+                path = file_path;
+                if !path.ends_with(".json") {
+                    path.push_str(".json");
+                }
+            }
+            Ok(nfd::Response::Cancel) => {
+                println!("SAVE_FILE_INFO: User cancelled the dialog");
+                return false;
+            }
+            Ok(nfd::Response::OkayMultiple(_)) => {
+                println!("SAVE_FILE_ERR: Tried to open multiple files when it shouldn't?");
+                return false;
+            }
+            Err(error) => {
+                println!("SAVE_FILE_ERR: {}", error);
+                return false;
+            }
+        }
+
+        let mut obj = JsonObject::new();
+
+        for n in &self.node_pool {
+            obj.push_obj(&n.id);
+            let sub_obj = obj.get_obj_ref(&n.id).unwrap();
+            match n.node_type {
+                NodeTypes::Dialogue => {
+                    // obj.set_string("id", n.id.as_str());
+                    sub_obj.set_string("type", "dialogue");
+                    sub_obj.set_string("character", &n.character.clone().unwrap());
+                    sub_obj.set_string("dialogue", &n.dialogue.clone().unwrap());
+                    sub_obj.set_string("next", &n.front_links[0]);
+                }
+                NodeTypes::Options => {
+                    sub_obj.set_string("type", "options");
+                    sub_obj.push_obj("options");
+                    let exits = sub_obj.get_obj_ref("options").unwrap();
+                    for (i, o) in n.options.clone().unwrap().iter().enumerate() {
+                        exits.set_string(o, &n.front_links[i]);
+                    }
+                }
+                NodeTypes::Conditional => {
+                    sub_obj.set_string("type", "conditional");
+                    sub_obj.set_string("flag_to_check", &n.flag_to_check.clone().unwrap());
+                    sub_obj.push_obj("if");
+                    let exits = sub_obj.get_obj_ref("if").unwrap();
+                    exits.set_string("true", &n.front_links[0]);
+                    exits.set_string("false", &n.front_links[1]);
+                    exits.set_string("not_set", &n.front_links[2]);
+                }
+                NodeTypes::SetFlag => {
+                    sub_obj.set_string("type", "set_flag");
+                    sub_obj.set_string("flag_to_set", &n.flag_to_set.clone().unwrap());
+                    sub_obj.set_bool("value", n.value_to_set.clone().unwrap());
+                    sub_obj.set_string("next", &n.front_links[0]);
+                }
+                NodeTypes::EmitEvent => {
+                    sub_obj.set_string("type", "emit_event");
+                    sub_obj.set_string("event", &n.event_to_emit.clone().unwrap());
+                    sub_obj.push_obj("args");
+                    let exits = sub_obj.get_obj_ref("args").unwrap();
+                    for o in n.event_data.clone().unwrap() {
+                        exits.set_string(&o.0, &o.1);
+                    }
+                }
+                _ => unimplemented!("{:?}", n.node_type)
+            }
+            obj.print();
+        }
+        
+        let file_content = obj.stringify();
+        match std::fs::write(path, file_content) {
+            Ok(()) => println!("SAVE_FILE_INFO: File written successfully"),
+            Err(e) => println!("SAVE_FILE_ERR: {:?}", e),
+        }
+
+        true
+    }
+
     fn get_free_node_id(&self) -> String {
         'outer_loop: for i in 1..99999 {
             let cur_i = format!("{:0>5}", i.to_string()); // i with left 0 tabs
@@ -931,6 +1025,10 @@ impl CanvasScene {
     }
 
     pub fn update_roaming(&mut self, rl: &RaylibHandle, last_mouse_pos: &mut Vector2) {
+        if rl.is_key_pressed(KeyboardKey::KEY_S) {
+            let test = self.save_to_file();
+        }
+
         let context_menu_notification = self.context_menu.update(rl, self.get_mouse_world_pos(rl));
         match context_menu_notification {
             None => {}
@@ -978,8 +1076,12 @@ impl CanvasScene {
                             self.cards.push(new_card);
                         }
                         NodeTypes::EmitEvent => {
-                            let new_node =
-                                Node::new_emit_event(new_id.clone(), "".to_string(), vec![]);
+                            let new_node = Node::new_emit_event(
+                                new_id.clone(),
+                                "".to_string(),
+                                vec![],
+                                vec![],
+                            );
                             self.node_pool.push(new_node);
 
                             let new_card =
@@ -1493,52 +1595,58 @@ fn main() {
         },
         cards: Vec::default(),
         node_pool: vec![
-            // Node::new_dialogue(
-            //     "001",
-            //     "John doe",
-            //     "Test test testing",
-            //     vec!["002".to_string()],
-            // ),
-            // Node::new_dialogue(
-            //     "002",
-            //     "Second one coming",
-            //     "I really hope this doesn't break everything.",
-            //     vec!["003".to_string()],
-            // ),
-            // Node::new_options(
-            //     "003",
-            //     vec![
-            //         "Hi".to_string(),
-            //         "Bye".to_string(),
-            //         "Let's go".to_string(),
-            //         "To the conditionals!".to_string(),
-            //     ],
-            //     vec![
-            //         "001".to_string(),
-            //         "002".to_string(),
-            //         "003".to_string(),
-            //         "004".to_string(),
-            //     ],
-            // ),
-            // Node::new_conditional(
-            //     "004",
-            //     "FLAG1",
-            //     vec!["001".to_string(), "".to_string(), "003".to_string()],
-            // ),
-            // Node::new_set_flag("005", "FLAG1", true, vec!["".to_string()]),
-            // Node::new_emit_event(
-            //     "00001",
-            //     "FLIP_H_SPRITE",
-            //     vec![("CHAR_TO_FLIP".to_string(), "CHAR_NAME".to_string())],
-            // ),
-            // Node::new_emit_event(
-            //     "00002",
-            //     "ERR_EXIT",
-            //     vec![
-            //         ("CODE".to_string(), "001".to_string()),
-            //         ("MESSAGE".to_string(), "ERR MESSAGE HERE".to_string()),
-            //     ],
-            // ),
+            Node::new_dialogue(
+                "00001",
+                "John doe",
+                "Test test testing",
+                vec!["00002".to_string()],
+            ),
+            Node::new_dialogue(
+                "00002",
+                "Second one coming",
+                "I really hope this doesn't break everything.",
+                vec!["00003".to_string()],
+            ),
+            Node::new_options(
+                "00003",
+                vec![
+                    "Hi".to_string(),
+                    "Bye".to_string(),
+                    "Let's go".to_string(),
+                    "To the conditionals!".to_string(),
+                ],
+                vec![
+                    "00001".to_string(),
+                    "00002".to_string(),
+                    "00003".to_string(),
+                    "00004".to_string(),
+                ],
+            ),
+            Node::new_conditional(
+                "00004",
+                "FLAG1",
+                vec![
+                    "00001".to_string(),
+                    "00005".to_string(),
+                    "00003".to_string(),
+                ],
+            ),
+            Node::new_set_flag("00005", "FLAG1", true, vec!["00006".to_string()]),
+            Node::new_emit_event(
+                "00006",
+                "FLIP_H_SPRITE",
+                vec![("CHAR_TO_FLIP".to_string(), "CHAR_NAME".to_string())],
+                vec!["00007".to_string()],
+            ),
+            Node::new_emit_event(
+                "00007",
+                "ERR_EXIT",
+                vec![
+                    ("CODE".to_string(), "001".to_string()),
+                    ("MESSAGE".to_string(), "ERR MESSAGE HERE".to_string()),
+                ],
+                vec!["00001".to_string()],
+            ),
         ],
         state: CanvasSceneStates::Roaming,
         mouse_sate: CanvasMouseState::Roaming,
