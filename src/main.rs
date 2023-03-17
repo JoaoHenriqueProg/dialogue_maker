@@ -17,7 +17,7 @@ enum CanvasMouseState {
 #[derive(Clone, Debug, PartialEq)]
 enum NodeTypes {
     Dialogue,
-    Options,
+    Branches,
     SetFlag,
     Conditional, // Noticed I didn't think enough about this one, decide to make it so that flags are only flags
     EmitEvent,
@@ -34,7 +34,7 @@ impl Default for NodeTypes {
 enum NodeMember {
     Character,
     Dialogue,
-    Options(usize),
+    Branch(usize),
     FlagToCheck,
     FlagToSet,
     ValueToSet,
@@ -48,7 +48,7 @@ struct Node {
     id: String,
     character: Option<String>,
     dialogue: Option<String>,
-    options: Option<Vec<String>>,
+    branches: Option<Vec<String>>,
     flag_to_check: Option<String>,
     flag_to_set: Option<String>,
     value_to_set: Option<bool>,
@@ -81,17 +81,17 @@ impl Node {
         to_return
     }
 
-    fn default_options() -> Node {
+    fn default_branches() -> Node {
         let mut to_return = Node::default();
-        to_return.options = Some(vec![]);
+        to_return.branches = Some(vec![]);
         to_return.front_links = vec![];
-        to_return.node_type = NodeTypes::Options;
+        to_return.node_type = NodeTypes::Branches;
         to_return
     }
-    fn new_options<T: ToString>(id: T, options: Vec<String>, front_links: Vec<String>) -> Node {
-        let mut to_return = Node::default_options();
+    fn new_branches<T: ToString>(id: T, branches: Vec<String>, front_links: Vec<String>) -> Node {
+        let mut to_return = Node::default_branches();
         to_return.id = id.to_string();
-        to_return.options = Some(options);
+        to_return.branches = Some(branches);
         to_return.front_links = front_links;
         to_return
     }
@@ -261,7 +261,7 @@ struct Card {
 #[derive(Debug)]
 enum CardNotification {
     EditTextInput { id: String, node_member: NodeMember },
-    AddOptionToOptionsNode(String),
+    AddBranchToBranchesNode(String),
     AddArgToEmitEventNode(String),
     ToggleCheckBox { id: String, node_member: NodeMember },
     CreatingCardConnection(String, usize), // id, output index
@@ -298,23 +298,23 @@ impl Card {
         }
     }
 
-    fn new_options(node_id: String, options: Vec<String>, pos: Vector2) -> Card {
-        let mut options_widgets = vec![];
+    fn new_branches(node_id: String, branches: Vec<String>, pos: Vector2) -> Card {
+        let mut branches_widgets = vec![];
 
         let mut offset_y = 10.;
         let mut cur_i = 0;
 
-        for _ in options {
-            options_widgets.push(Widget {
+        for _ in branches {
+            branches_widgets.push(Widget {
                 node_ref: node_id.clone(),
                 widget_type: WidgetType::TextInput,
                 offset: Vector2 {
                     x: 10.,
                     y: offset_y,
                 },
-                editing_node_member: Some(NodeMember::Options(cur_i)),
+                editing_node_member: Some(NodeMember::Branch(cur_i)),
             });
-            options_widgets.push(Widget {
+            branches_widgets.push(Widget {
                 node_ref: node_id.clone(),
                 widget_type: WidgetType::OutputConnection,
                 offset: Vector2 {
@@ -334,8 +334,8 @@ impl Card {
                 x: 170.,
                 y: offset_y,
             },
-            widgets: options_widgets,
-            card_type: NodeTypes::Options,
+            widgets: branches_widgets,
+            card_type: NodeTypes::Branches,
         }
     }
 
@@ -534,14 +534,14 @@ impl Card {
             }
 
             match self.card_type {
-                NodeTypes::Options => {
+                NodeTypes::Branches => {
                     let add_button_center = Vector2 {
                         x: self.pos.x + self.size.x / 2.,
                         y: self.pos.y + self.size.y,
                     };
 
                     if mouse_world_pos.distance_to(add_button_center) < 10. {
-                        return Some(CardNotification::AddOptionToOptionsNode(
+                        return Some(CardNotification::AddBranchToBranchesNode(
                             self.node_ref.clone(),
                         ));
                     }
@@ -575,12 +575,12 @@ impl Card {
                 self.widgets[1].draw(d, self.pos, node_data.dialogue, None);
                 self.widgets[2].draw(d, self.pos, None, None)
             }
-            NodeTypes::Options => {
+            NodeTypes::Branches => {
                 let mut cur_opt_i = 0;
                 for i in &self.widgets {
                     match i.widget_type {
                         WidgetType::TextInput => {
-                            let cur_opt_vec = node_data.options.clone().unwrap();
+                            let cur_opt_vec = node_data.branches.clone().unwrap();
                             let cur_opt_text = cur_opt_vec[cur_opt_i].clone();
                             i.draw(d, self.pos, Some(cur_opt_text), None);
                             cur_opt_i += 1;
@@ -718,7 +718,7 @@ impl Card {
 
         d.draw_circle(x_pos, y_pos, corner_radius as f32, Color::PINK);
 
-        if self.card_type == NodeTypes::Options || self.card_type == NodeTypes::EmitEvent {
+        if self.card_type == NodeTypes::Branches || self.card_type == NodeTypes::EmitEvent {
             d.draw_circle(
                 x_pos + x_size / 2,
                 y_pos + y_size,
@@ -800,7 +800,7 @@ impl CanvasContextMenu {
                     }
                     1 => {
                         return Some(CanvasContextMenuNotification::CreateNewCard(
-                            NodeTypes::Options,
+                            NodeTypes::Branches,
                         ));
                     }
                     2 => {
@@ -925,11 +925,11 @@ impl CanvasScene {
                     sub_obj.set_string("dialogue", &n.dialogue.clone().unwrap());
                     sub_obj.set_string("next", &n.front_links[0]);
                 }
-                NodeTypes::Options => {
-                    sub_obj.set_string("type", "options");
-                    sub_obj.push_obj("options");
-                    let exits = sub_obj.get_obj_ref("options").unwrap();
-                    for (i, o) in n.options.clone().unwrap().iter().enumerate() {
+                NodeTypes::Branches => {
+                    sub_obj.set_string("type", "branches");
+                    sub_obj.push_obj("branches");
+                    let exits = sub_obj.get_obj_ref("branches").unwrap();
+                    for (i, o) in n.branches.clone().unwrap().iter().enumerate() {
                         exits.set_string(o, &n.front_links[i]);
                     }
                 }
@@ -1023,24 +1023,24 @@ impl CanvasScene {
                             obj.get_string("dialogue").unwrap(),
                             vec![obj.get_string("next").unwrap()],
                         )),
-                        "options" => {
-                            let mut options_vec: Vec<String> = vec![];
+                        "branches" => {
+                            let mut branches_vec: Vec<String> = vec![];
                             let mut front_vec: Vec<String> = vec![];
 
-                            for exit in obj.get_obj("options").unwrap().children {
-                                options_vec.push(exit.0);
+                            for exit in obj.get_obj("branches").unwrap().children {
+                                branches_vec.push(exit.0);
 
                                 match exit.1 {
                                     JsonType::String(next_node) => front_vec.push(next_node),
                                     _ => {
-                                        println!("LOAD_FILE_ERR: Options' exits must be Strings.");
+                                        println!("LOAD_FILE_ERR: branches' exits must be Strings.");
                                         return false;
                                     }
                                 }
                             }
 
                             self.node_pool
-                                .push(Node::new_options(n_id, options_vec, front_vec))
+                                .push(Node::new_branches(n_id, branches_vec, front_vec))
                         }
                         "conditional" => {
                             let exits = obj.get_obj("if").unwrap();
@@ -1175,13 +1175,13 @@ impl CanvasScene {
                             let new_card = Card::new_dialogue(new_id, self.get_mouse_world_pos(rl));
                             self.cards.push(new_card);
                         }
-                        NodeTypes::Options => {
-                            let mut new_node = Node::default_options();
+                        NodeTypes::Branches => {
+                            let mut new_node = Node::default_branches();
                             new_node.id = new_id.clone();
                             self.node_pool.push(new_node);
 
                             let new_card =
-                                Card::new_options(new_id, vec![], self.get_mouse_world_pos(rl));
+                                Card::new_branches(new_id, vec![], self.get_mouse_world_pos(rl));
                             self.cards.push(new_card);
                         }
                         NodeTypes::SetFlag => {
@@ -1301,9 +1301,9 @@ impl CanvasScene {
                         self.state = CanvasSceneStates::EditingTextInput(id, node_member);
                         return;
                     }
-                    CardNotification::AddOptionToOptionsNode(id) => {
+                    CardNotification::AddBranchToBranchesNode(id) => {
                         post_handle_notification =
-                            Some(CardNotification::AddOptionToOptionsNode(id));
+                            Some(CardNotification::AddBranchToBranchesNode(id));
                     }
                     CardNotification::AddArgToEmitEventNode(id) => {
                         post_handle_notification =
@@ -1336,20 +1336,20 @@ impl CanvasScene {
         match post_handle_notification {
             None => {}
             Some(notification) => match notification {
-                CardNotification::AddOptionToOptionsNode(id) => {
+                CardNotification::AddBranchToBranchesNode(id) => {
                     let pos = self.copy_card_data(&id).pos;
 
                     let mut cur_node = self.get_node_ref(&id);
-                    let mut next_node_opt_vec = cur_node.options.clone().unwrap();
+                    let mut next_node_opt_vec = cur_node.branches.clone().unwrap();
                     next_node_opt_vec.push("Empty".to_string());
-                    cur_node.options = Some(next_node_opt_vec);
+                    cur_node.branches = Some(next_node_opt_vec);
                     let mut next_node_exit_vec = cur_node.front_links.clone();
                     next_node_exit_vec.push("".to_string());
                     cur_node.front_links = next_node_exit_vec;
 
-                    let new_card = Card::new_options(
+                    let new_card = Card::new_branches(
                         cur_node.id.clone(),
-                        cur_node.clone().options.unwrap(),
+                        cur_node.clone().branches.unwrap(),
                         pos,
                     );
 
@@ -1496,9 +1496,9 @@ impl CanvasScene {
             CanvasSceneStates::EditingTextInput(wte, member) => match member {
                 NodeMember::Character => cur_text = self.copy_node_data(&wte).character.unwrap(),
                 NodeMember::Dialogue => cur_text = self.copy_node_data(&wte).dialogue.unwrap(),
-                NodeMember::Options(i) => {
-                    let options_vec = &self.copy_node_data(&wte).options.unwrap();
-                    cur_text = options_vec[*i].clone();
+                NodeMember::Branch(i) => {
+                    let branches_vec = &self.copy_node_data(&wte).branches.unwrap();
+                    cur_text = branches_vec[*i].clone();
                 }
                 NodeMember::FlagToCheck => {
                     cur_text = self.copy_node_data(&wte).flag_to_check.unwrap()
@@ -1531,10 +1531,10 @@ impl CanvasScene {
                         match member {
                             NodeMember::Dialogue => i.dialogue = Some(cur_text.clone()),
                             NodeMember::Character => i.character = Some(cur_text.clone()),
-                            NodeMember::Options(opt_i) => {
-                                let mut cur_vec = i.options.clone().unwrap();
+                            NodeMember::Branch(opt_i) => {
+                                let mut cur_vec = i.branches.clone().unwrap();
                                 cur_vec[*opt_i] = cur_text.clone();
-                                i.options = Some(cur_vec);
+                                i.branches = Some(cur_vec);
                             }
                             NodeMember::FlagToCheck => i.flag_to_check = Some(cur_text.clone()),
                             NodeMember::FlagToSet => i.flag_to_set = Some(cur_text.clone()),
@@ -1602,11 +1602,11 @@ impl CanvasScene {
                     self.cards.push(Card::new_dialogue(i.id.clone(), card_pos));
                     x_offset += 200.;
                 }
-                NodeTypes::Options => {
+                NodeTypes::Branches => {
                     let card_pos = Vector2 { x: x_offset, y: 0. };
-                    self.cards.push(Card::new_options(
+                    self.cards.push(Card::new_branches(
                         i.id.clone(),
-                        i.clone().options.unwrap(),
+                        i.clone().branches.unwrap(),
                         card_pos,
                     ));
                     x_offset += 200.;
