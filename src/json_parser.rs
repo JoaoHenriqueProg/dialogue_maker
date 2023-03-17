@@ -371,8 +371,14 @@ impl Parser {
         self.expect_char('"');
 
         self.cur_i += 1;
-
+        
         let mut to_return = "".to_string();
+        
+        if self.cur_char() == '"' {
+            self.cur_i += 1;
+            return to_return
+        }
+
         loop {
             if self.cur_char() == '"' {
                 break;
@@ -513,6 +519,7 @@ impl Parser {
         self.expect_char('{');
 
         self.cur_i += 1;
+        self.ignore_white_space();
 
         if self.cur_char() == '}' {
             self.cur_i += 1;
@@ -523,9 +530,10 @@ impl Parser {
             self.ignore_white_space();
 
             let new_key = self.parse_string();
-            if new_key == "" {
-                panic!("Empty key!");
-            }
+            // Aparently, this is allowed
+            // if new_key == "" {
+            //     panic!("Empty key!");
+            // }
 
             self.expect_char(':');
             self.cur_i += 1;

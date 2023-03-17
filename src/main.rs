@@ -1210,7 +1210,7 @@ impl CanvasScene {
                                 new_id.clone(),
                                 "".to_string(),
                                 vec![],
-                                vec![],
+                                vec!["".to_string()],
                             );
                             self.node_pool.push(new_node);
 
