@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use json_parser::{JsonObject, JsonType, Parser};
-use raylib::prelude::*;
+use raylib::{input::key_from_i32, prelude::*};
 
 mod json_parser;
 
@@ -1461,34 +1461,34 @@ impl CanvasScene {
             _ => return,
         }
 
-        let keymap = [
-            ('A', KeyboardKey::KEY_A),
-            ('B', KeyboardKey::KEY_B),
-            ('C', KeyboardKey::KEY_C),
-            ('D', KeyboardKey::KEY_D),
-            ('E', KeyboardKey::KEY_E),
-            ('F', KeyboardKey::KEY_F),
-            ('G', KeyboardKey::KEY_G),
-            ('H', KeyboardKey::KEY_H),
-            ('I', KeyboardKey::KEY_I),
-            ('J', KeyboardKey::KEY_J),
-            ('K', KeyboardKey::KEY_K),
-            ('L', KeyboardKey::KEY_L),
-            ('M', KeyboardKey::KEY_M),
-            ('N', KeyboardKey::KEY_N),
-            ('O', KeyboardKey::KEY_O),
-            ('P', KeyboardKey::KEY_P),
-            ('Q', KeyboardKey::KEY_Q),
-            ('R', KeyboardKey::KEY_R),
-            ('S', KeyboardKey::KEY_S),
-            ('T', KeyboardKey::KEY_T),
-            ('U', KeyboardKey::KEY_U),
-            ('V', KeyboardKey::KEY_V),
-            ('W', KeyboardKey::KEY_W),
-            ('X', KeyboardKey::KEY_X),
-            ('Y', KeyboardKey::KEY_Y),
-            ('Z', KeyboardKey::KEY_Z),
-        ];
+        // let keymap = [
+        //     ('A', KeyboardKey::KEY_A),
+        //     ('B', KeyboardKey::KEY_B),
+        //     ('C', KeyboardKey::KEY_C),
+        //     ('D', KeyboardKey::KEY_D),
+        //     ('E', KeyboardKey::KEY_E),
+        //     ('F', KeyboardKey::KEY_F),
+        //     ('G', KeyboardKey::KEY_G),
+        //     ('H', KeyboardKey::KEY_H),
+        //     ('I', KeyboardKey::KEY_I),
+        //     ('J', KeyboardKey::KEY_J),
+        //     ('K', KeyboardKey::KEY_K),
+        //     ('L', KeyboardKey::KEY_L),
+        //     ('M', KeyboardKey::KEY_M),
+        //     ('N', KeyboardKey::KEY_N),
+        //     ('O', KeyboardKey::KEY_O),
+        //     ('P', KeyboardKey::KEY_P),
+        //     ('Q', KeyboardKey::KEY_Q),
+        //     ('R', KeyboardKey::KEY_R),
+        //     ('S', KeyboardKey::KEY_S),
+        //     ('T', KeyboardKey::KEY_T),
+        //     ('U', KeyboardKey::KEY_U),
+        //     ('V', KeyboardKey::KEY_V),
+        //     ('W', KeyboardKey::KEY_W),
+        //     ('X', KeyboardKey::KEY_X),
+        //     ('Y', KeyboardKey::KEY_Y),
+        //     ('Z', KeyboardKey::KEY_Z),
+        // ];
 
         let mut cur_text;
 
@@ -1519,11 +1519,25 @@ impl CanvasScene {
             },
             _ => panic!("Something has gone incredibly wrong."),
         }
-        for &(c, key) in &keymap {
-            if d.is_key_pressed(key) {
-                cur_text.push(c);
-            }
+
+        // I had to copy the code from d.get_key_pressed() since it simply doesn't work
+        let pressed_key;
+        let key = unsafe { ffi::GetKeyPressed() };
+        if key > 0 {
+            pressed_key = key_from_i32(key);
+        } else {
+            pressed_key = None
         }
+
+        match pressed_key {
+            Some(key) => {
+                let to_ascii = key as u8 + 32;
+                if to_ascii >= 97 && to_ascii <= 123 {
+                    cur_text.push(to_ascii as char);
+                }}
+            None => {}
+        }
+
         match &self.state {
             CanvasSceneStates::EditingTextInput(id, member) => {
                 for i in &mut self.node_pool {
